@@ -1,4 +1,4 @@
-# OpenGL Renderer
+# Terrain Generator
 
 A lightweight, cross-platform 3D rendering engine built using modern C++ and OpenGL. This project can generate infinitely loading terrain using perlin noise and opengl.
 
