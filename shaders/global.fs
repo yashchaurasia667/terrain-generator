@@ -49,8 +49,8 @@ struct SpotLight {
 
 layout (std140) uniform lights {
   DirectionalLight directionalLight;              // 0 -> 96
-  int numPointLights;                             // 96 -> 100 + 12 padding
-  PointLight pointLights[MAX_POINT_LIGHTS];       // 112 -> (64 * 96) + 112
-  int numSpotLights;                              // 6256-> 6260 + 12 padding
-  SpotLight spotlights[MAX_SPOT_LIGHTS];          // 6272-> (8 * 128) + 6272
+  PointLight pointLights[MAX_POINT_LIGHTS];       // 96 -> (64 * 96) + 96
+  SpotLight spotlights[MAX_SPOT_LIGHTS];          // 6240 -> (8 * 128) + 6240
+  int numPointLights;                             // 7264 -> 7268 + 12 padding
+  int numSpotLights;                              // 7280 -> 7280 + 12 padding
 };
