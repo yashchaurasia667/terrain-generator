@@ -58,6 +58,14 @@ struct Skybox
   Skybox() = default;
 };
 
+struct Globals {
+  Shader shader;
+  int matrices_index;
+  unsigned int matrices;
+  int lights_index;
+  unsigned int lights;
+};
+
 class Renderer
 {
 private:
@@ -80,7 +88,7 @@ public:
   static float ambient, diffuse, specular;
   static GLFWmousebuttonfun glfw_mouse_button_callback;
   static GLFWkeyfun glfw_key_callback;
-  static Shader global_shader;
+  static Globals *global;
 
   Renderer(const char *title, int width, int height, const char *glsl_version, bool vsync);
   ~Renderer();

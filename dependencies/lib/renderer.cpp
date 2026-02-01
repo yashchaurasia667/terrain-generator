@@ -23,7 +23,7 @@ std::vector<SpotLight> Renderer::spotLights;
 float Renderer::main_scale = 0.0f;
 ImGuiIO *Renderer::io = nullptr;
 Shader Renderer::lightShader;
-Shader Renderer::global_shader;
+Globals *Renderer::global;
 
 Skybox *Renderer::skybox = nullptr;
 
@@ -98,7 +98,33 @@ Renderer::Renderer(const char *title, int width, int height, const char *glsl_ve
   glfwSetMouseButtonCallback(window, GLFWMouseButtonCallback);
 
   lightShader = Shader("../shaders/light.vs", "../shaders/light.fs");
-  global_shader = Shader("../shaders/global.vs", "../shaders/default.fs");
+
+  // SETUP GLOBAL SHADERS UNIFORMS
+  global = new Globals();
+  global->shader = Shader("../shaders/global.vs", "../shaders/global.fs");
+
+  // view, proj matrices
+  glCall(glGenBuffers(1, &global->matrices));
+  glCall(glBindBuffer(GL_UNIFORM_BUFFER, global->matrices));
+
+  int size;
+  global->matrices_index = glGetUniformBlockIndex(global->shader.getId(), "matrices");
+  glCall(glGetActiveUniformBlockiv(global->shader.getId(), global->matrices_index, GL_UNIFORM_BLOCK_DATA_SIZE, &size));
+
+  glCall(glBufferData(GL_UNIFORM_BUFFER, size, NULL, GL_STATIC_DRAW));
+  // glCall(glBindBufferRange(GL_UNIFORM_BUFFER, 0, global->matrices, 0, size));
+  glCall(glBindBufferBase(GL_UNIFORM_BUFFER, 0, global->matrices));
+
+  // lights
+  glCall(glGenBuffers(1, &global->lights));
+  glCall(glBindBuffer(GL_UNIFORM_BUFFER, global->lights));
+
+  global->lights_index = glGetUniformBlockIndex(global->shader.getId(), "lights");
+  glCall(glGetActiveUniformBlockiv(global->shader.getId(), global->lights_index, GL_UNIFORM_BLOCK_DATA_SIZE, &size));
+
+  glCall(glBufferData(GL_UNIFORM_BUFFER, size, NULL, GL_STATIC_DRAW));
+  // glCall(glBindBufferRange(GL_UNIFORM_BUFFER, 0, global->lights, 0, size));
+  glCall(glBindBufferBase(GL_UNIFORM_BUFFER, 0, global->lights));
 
   // INITIALIZE SKYBOX
   float skyboxVertices[] = {
@@ -352,11 +378,18 @@ void Renderer::start(void (*game_loop)(GLFWwindow *window, Shader &shader), Shad
     if (game_loop && window)
       game_loop(window, shader);
 
-    global_shader.setInt("numPointLights", pointLights.size());
-    global_shader.setInt("numSpotLights", spotLights.size());
+    glBindBuffer(GL_UNIFORM_BUFFER, global->lights);
+    glBufferSubData(GL_UNIFORM_BUFFER, );
+    // global->shader.setInt("numPointLights", pointLights.size());
+    // global->shader.setInt("numSpotLights", spotLights.size());
 
     glm::mat4 view = camera.getViewMatrix();
     glm::mat4 projection = glm::perspective(camera.getFov(), (float)Renderer::width / (float)Renderer::height, 0.1f, 100.0f);
+
+    glCall(glBindBuffer(GL_UNIFORM_BUFFER, global->matrices));
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(view)));
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), 2 * sizeof(glm::mat4), glm::value_ptr(projection)));
+
     drawLights(view, projection);
 
     for (unsigned int i = 0; i < models.size(); i++)
@@ -365,14 +398,11 @@ void Renderer::start(void (*game_loop)(GLFWwindow *window, Shader &shader), Shad
     // DRAW SKYBOX
     glCall(glDepthFunc(GL_LEQUAL));
     skybox->shader.bind();
-    skybox->shader.setMat4("view", glm::mat4(glm::mat3(view)));
-    skybox->shader.setMat4("projection", projection);
 
     skybox->vao.bind();
     glCall(glActiveTexture(GL_TEXTURE0));
     glCall(glBindTexture(GL_TEXTURE_CUBE_MAP, skybox->texId));
     skybox->shader.setInt("skybox", 0);
-    // std::cout << "Skybox uniform location: " << glGetUniformLocation(skybox->shader.getId(), "skybox") << std::endl;
 
     glCall(glDrawArrays(GL_TRIANGLES, 0, 36));
     glCall(glDepthFunc(GL_LESS));
@@ -468,13 +498,13 @@ void Renderer::drawLights(glm::mat4 view, glm::mat4 projection)
   // DRAW DIRECTIONAL LIGHT
   if (dirLightEnabled)
   {
-    global_shader.bind();
-    global_shader.setVec3("directionalLights[0].direction", dirLight.direction);
-    global_shader.setVec3("directionalLights[0].color", dirLight.color);
-    global_shader.setFloat("directionalLights[0].strength", dirLight.strength);
-    global_shader.setVec3("directionalLights[0].ambient", glm::vec3(ambient));
-    global_shader.setVec3("directionalLights[0].diffuse", glm::vec3(diffuse));
-    global_shader.setVec3("directionalLights[0].specular", glm::vec3(specular));
+    global->shader.bind();
+    global->shader.setVec3("directionalLights[0].direction", dirLight.direction);
+    global->shader.setVec3("directionalLights[0].color", dirLight.color);
+    global->shader.setFloat("directionalLights[0].strength", dirLight.strength);
+    global->shader.setVec3("directionalLights[0].ambient", glm::vec3(ambient));
+    global->shader.setVec3("directionalLights[0].diffuse", glm::vec3(diffuse));
+    global->shader.setVec3("directionalLights[0].specular", glm::vec3(specular));
   }
 
   // DRAW ALL POINT LIGHTS
@@ -490,18 +520,18 @@ void Renderer::drawLights(glm::mat4 view, glm::mat4 projection)
 
     std::string lightstr = "pointLights";
     lightstr += "[" + std::to_string(i) + "]";
-    global_shader.bind();
-    global_shader.setVec3((lightstr + ".position").c_str(), pointLights[i].model.position);
-    global_shader.setVec3((lightstr + ".color").c_str(), pointLights[i].color);
+    global->shader.bind();
+    global->shader.setVec3((lightstr + ".position").c_str(), pointLights[i].model.position);
+    global->shader.setVec3((lightstr + ".color").c_str(), pointLights[i].color);
 
-    global_shader.setVec3((lightstr + ".ambient").c_str(), glm::vec3(0.05f));
-    global_shader.setVec3((lightstr + ".diffuse").c_str(), glm::vec3(diffuse));
-    global_shader.setVec3((lightstr + ".specular").c_str(), glm::vec3(specular));
+    global->shader.setVec3((lightstr + ".ambient").c_str(), glm::vec3(0.05f));
+    global->shader.setVec3((lightstr + ".diffuse").c_str(), glm::vec3(diffuse));
+    global->shader.setVec3((lightstr + ".specular").c_str(), glm::vec3(specular));
 
-    global_shader.setFloat((lightstr + ".strength").c_str(), pointLights[i].strength);
-    global_shader.setFloat((lightstr + ".constant").c_str(), 1.0f);
-    global_shader.setFloat((lightstr + ".linear").c_str(), 0.22f);
-    global_shader.setFloat((lightstr + ".quadratic").c_str(), 0.20f);
+    global->shader.setFloat((lightstr + ".strength").c_str(), pointLights[i].strength);
+    global->shader.setFloat((lightstr + ".constant").c_str(), 1.0f);
+    global->shader.setFloat((lightstr + ".linear").c_str(), 0.22f);
+    global->shader.setFloat((lightstr + ".quadratic").c_str(), 0.20f);
   }
 
   // DRAW ALL SPOTLIGHTS
@@ -518,22 +548,22 @@ void Renderer::drawLights(glm::mat4 view, glm::mat4 projection)
 
     std::string lightstr = "spotlights";
     lightstr += "[" + std::to_string(i) + "]";
-    global_shader.bind();
-    global_shader.setVec3((lightstr + ".position").c_str(), spotLights[i].model.position);
-    global_shader.setVec3((lightstr + ".direction").c_str(), spotLights[i].direction);
-    global_shader.setVec3((lightstr + ".color").c_str(), spotLights[i].color);
+    global->shader.bind();
+    global->shader.setVec3((lightstr + ".position").c_str(), spotLights[i].model.position);
+    global->shader.setVec3((lightstr + ".direction").c_str(), spotLights[i].direction);
+    global->shader.setVec3((lightstr + ".color").c_str(), spotLights[i].color);
 
-    global_shader.setVec3((lightstr + ".ambient").c_str(), glm::vec3(0.05f));
-    global_shader.setVec3((lightstr + ".diffuse").c_str(), glm::vec3(diffuse));
-    global_shader.setVec3((lightstr + ".specular").c_str(), glm::vec3(specular));
+    global->shader.setVec3((lightstr + ".ambient").c_str(), glm::vec3(0.05f));
+    global->shader.setVec3((lightstr + ".diffuse").c_str(), glm::vec3(diffuse));
+    global->shader.setVec3((lightstr + ".specular").c_str(), glm::vec3(specular));
 
-    global_shader.setFloat((lightstr + ".strength").c_str(), spotLights[i].strength);
-    global_shader.setFloat((lightstr + ".constant").c_str(), 1.0f);
-    global_shader.setFloat((lightstr + ".linear").c_str(), 0.22f);
-    global_shader.setFloat((lightstr + ".quadratic").c_str(), 0.20f);
+    global->shader.setFloat((lightstr + ".strength").c_str(), spotLights[i].strength);
+    global->shader.setFloat((lightstr + ".constant").c_str(), 1.0f);
+    global->shader.setFloat((lightstr + ".linear").c_str(), 0.22f);
+    global->shader.setFloat((lightstr + ".quadratic").c_str(), 0.20f);
 
-    global_shader.setFloat((lightstr + ".cutOff").c_str(), glm::radians(spotLights[i].cutoff));
-    global_shader.setFloat((lightstr + ".outerCutOff").c_str(), glm::radians(spotLights[i].oCutoff));
+    global->shader.setFloat((lightstr + ".cutOff").c_str(), glm::radians(spotLights[i].cutoff));
+    global->shader.setFloat((lightstr + ".outerCutOff").c_str(), glm::radians(spotLights[i].oCutoff));
   }
 }
 
