@@ -15,9 +15,11 @@ private:
 public:
   Shader() = default;
   Shader(const char *vertex_path, const char *fragment_path);
+  Shader(const char *vertex_path, const char *fragment_path, bool inc_global_vertex, bool inc_global_fragment);
   Shader(Shader &&other) noexcept;
   Shader &operator=(Shader &&other) noexcept;
   ~Shader();
+  void addGeometryShader(const char *geometryPath, bool inc_global_geometry);
 
   void bind();
   void unbind();

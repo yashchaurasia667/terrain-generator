@@ -50,13 +50,11 @@ void Shader::checkCompileError(unsigned int id, const char *type)
   }
 }
 
-unsigned int Shader::createShader(GLenum type, const char *path, const char *shader_type)
+unsigned int Shader::createShader(GLenum type, const char *source, const char *shader_type)
 {
   unsigned int id = glCreateShader(type);
-  string source = getShaderSource(path);
-  const char *c_source = source.c_str();
 
-  glCall(glShaderSource(id, 1, &c_source, NULL));
+  glCall(glShaderSource(id, 1, &source, NULL));
   glCall(glCompileShader(id));
   checkCompileError(id, shader_type);
 
@@ -65,8 +63,42 @@ unsigned int Shader::createShader(GLenum type, const char *path, const char *sha
 
 Shader::Shader(const char *vertex_path, const char *fragment_path)
 {
-  unsigned int vertex_shader = createShader(GL_VERTEX_SHADER, vertex_path, "VERTEX_SHADER");
-  unsigned int fragment_shader = createShader(GL_FRAGMENT_SHADER, fragment_path, "FRAGMENT_SHADER");
+  std::string vertex_source = getShaderSource(vertex_path);
+  std::string fragment_source = getShaderSource(fragment_path);
+  unsigned int vertex_shader = createShader(GL_VERTEX_SHADER, vertex_source.c_str(), "VERTEX_SHADER");
+  unsigned int fragment_shader = createShader(GL_FRAGMENT_SHADER, fragment_source.c_str(), "FRAGMENT_SHADER");
+
+  ID = glCreateProgram();
+  glCall(glAttachShader(ID, vertex_shader));
+  glCall(glAttachShader(ID, fragment_shader));
+  glCall(glLinkProgram(ID));
+  checkCompileError(ID, "PROGRAM");
+  glCall(glValidateProgram(ID));
+
+  glCall(glDeleteShader(vertex_shader));
+  glCall(glDeleteShader(fragment_shader));
+}
+
+Shader::Shader(const char *vertex_path, const char *fragment_path, bool inc_global_vertex, bool inc_global_fragment)
+{
+  std::string vertex_source = getShaderSource(vertex_path);
+  std::string fragment_source = getShaderSource(fragment_path);
+
+  if (inc_global_vertex)
+  {
+    std::string g_vertex = getShaderSource("../shaders/global.vs");
+    vertex_source = vertex_source.substr(vertex_source.find("\n"), vertex_source.length());
+    vertex_source = g_vertex + vertex_source;
+  }
+  if (inc_global_fragment)
+  {
+    std::string g_fragment = getShaderSource("../shaders/global.fs");
+    fragment_source = fragment_source.substr(fragment_source.find("\n"), fragment_source.length());
+    fragment_source = g_fragment + fragment_source;
+  }
+
+  unsigned int vertex_shader = createShader(GL_VERTEX_SHADER, vertex_source.c_str(), "VERTEX_SHADER");
+  unsigned int fragment_shader = createShader(GL_FRAGMENT_SHADER, fragment_source.c_str(), "FRAGMENT_SHADER");
 
   ID = glCreateProgram();
   glCall(glAttachShader(ID, vertex_shader));
@@ -101,6 +133,24 @@ Shader::~Shader()
   {
     glCall(glDeleteProgram(ID));
   }
+}
+
+void Shader::addGeometryShader(const char *geometryPath, bool inc_global_geometry)
+{
+  std::string geometry_source = getShaderSource(geometryPath);
+  unsigned int geometry = createShader(GL_GEOMETRY_SHADER, geometry_source.c_str(), "GEOMETRY_SHADER");
+  if (inc_global_geometry)
+  {
+    std::string g_geometry = getShaderSource("../shaders/global.gs");
+    geometry_source = geometry_source.substr(geometry_source.find("#version"), geometry_source.length());
+    geometry_source = g_geometry + geometry_source;
+  }
+
+  glCall(glAttachShader(ID, geometry));
+  glCall(glLinkProgram(ID));
+  checkCompileError(ID, "PROGRAM");
+
+  glCall(glDeleteShader(geometry));
 }
 
 void Shader::bind()
