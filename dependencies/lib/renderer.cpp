@@ -383,14 +383,15 @@ void Renderer::start(void (*game_loop)(GLFWwindow *window, Shader &shader), Shad
     glCall(glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(view)));
     glCall(glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(projection)));
 
+    unsigned int mat_index = glGetUniformBlockIndex(shader.getId(), "matrices"), light_index = glGetUniformBlockIndex(shader.getId(), "lights");
+    glCall(glUniformBlockBinding(shader.getId(), mat_index, 0));
+    glCall(glUniformBlockBinding(shader.getId(), light_index, 1));
+
     if (game_loop && window)
       game_loop(window, shader);
 
     drawLights();
 
-    unsigned int mat_index = glGetUniformBlockIndex(shader.getId(), "matrices"), light_index = glGetUniformBlockIndex(shader.getId(), "lights");
-    glCall(glUniformBlockBinding(shader.getId(), mat_index, 0));
-    glCall(glUniformBlockBinding(shader.getId(), light_index, 1));
     for (unsigned int i = 0; i < models.size(); i++)
       models[i].draw(shader);
 
@@ -501,10 +502,15 @@ void Renderer::drawLights()
       "numPointLights",
       "numSpotLights",
   };
-  unsigned int offsets[5];
+  unsigned int indices[5];
+  int offsets[5];
 
   glCall(glBindBuffer(GL_UNIFORM_BUFFER, global->lights));
-  glCall(glGetUniformIndices(global->shader.getId(), 5, queries, offsets));
+  glCall(glGetUniformIndices(global->shader.getId(), 5, queries, indices));
+  glCall(glGetActiveUniformsiv(global->shader.getId(), 5, indices, GL_UNIFORM_OFFSET, offsets));
+
+  // for (int index : offsets)
+  //   std::cout << index << std::endl;
 
   int numPointLights = pointLights.size(), numSpotLights = spotLights.size();
   glCall(glBufferSubData(GL_UNIFORM_BUFFER, offsets[3], sizeof(int), &numPointLights));
@@ -523,7 +529,7 @@ void Renderer::drawLights()
     glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &diffuse));
     currOffset += 16;
     glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &specular));
-    currOffset += 16;
+    currOffset += 12;
     glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(float), &dirLight.strength));
   }
 
@@ -550,7 +556,7 @@ void Renderer::drawLights()
     glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &diffuse));
     currOffset += 16;
     glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &specular));
-    currOffset += 16;
+    currOffset += 12;
     glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(float), &pointLights[i].strength));
     currOffset += 4;
     glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(float), &constant));
@@ -585,7 +591,7 @@ void Renderer::drawLights()
     glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &diffuse));
     currOffset += 16;
     glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &specular));
-    currOffset += 16;
+    currOffset += 12;
 
     glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(float), &constant));
     currOffset += 4;
@@ -599,7 +605,7 @@ void Renderer::drawLights()
     glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(float), &spotLights[i].cutoff));
     currOffset += 4;
     glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(float), &spotLights[i].oCutoff));
-    currOffset += 8;
+    currOffset += 4;
   }
 }
 
