@@ -23,6 +23,7 @@ std::vector<SpotLight> Renderer::spotLights;
 float Renderer::main_scale = 0.0f;
 ImGuiIO *Renderer::io = nullptr;
 Shader Renderer::lightShader;
+Shader Renderer::global_shader;
 
 Skybox *Renderer::skybox = nullptr;
 
@@ -43,9 +44,8 @@ void GLFWKeyCallback(GLFWwindow *window, int key, int scancode, int action, int 
 {
   ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
 
-  // Only process game input if ImGui isn't capturing keyboard
-  if (ImGui::GetIO().WantCaptureKeyboard)
-    return;
+  // if (ImGui::GetIO().WantCaptureKeyboard)
+  //   return;
   Renderer::glfw_key_callback(window, key, scancode, action, mods);
 }
 
@@ -98,6 +98,7 @@ Renderer::Renderer(const char *title, int width, int height, const char *glsl_ve
   glfwSetMouseButtonCallback(window, GLFWMouseButtonCallback);
 
   lightShader = Shader("../shaders/light.vs", "../shaders/light.fs");
+  global_shader = Shader("../shaders/global.vs", "../shaders/default.fs");
 
   // INITIALIZE SKYBOX
   float skyboxVertices[] = {
@@ -351,13 +352,12 @@ void Renderer::start(void (*game_loop)(GLFWwindow *window, Shader &shader), Shad
     if (game_loop && window)
       game_loop(window, shader);
 
-    shader.setInt("numPointLights", pointLights.size());
-    shader.setInt("numDirectionalLights", 1);
-    shader.setInt("numSpotLights", spotLights.size());
+    global_shader.setInt("numPointLights", pointLights.size());
+    global_shader.setInt("numSpotLights", spotLights.size());
 
     glm::mat4 view = camera.getViewMatrix();
     glm::mat4 projection = glm::perspective(camera.getFov(), (float)Renderer::width / (float)Renderer::height, 0.1f, 100.0f);
-    drawLights(view, projection, shader);
+    drawLights(view, projection);
 
     for (unsigned int i = 0; i < models.size(); i++)
       models[i].draw(shader);
@@ -463,18 +463,18 @@ void Renderer::setErrorCallback(GLFWerrorfun callback)
 
 // ------------------------- HELPER FUNCTIONS ------------------------------------------
 
-void Renderer::drawLights(glm::mat4 view, glm::mat4 projection, Shader &shader)
+void Renderer::drawLights(glm::mat4 view, glm::mat4 projection)
 {
   // DRAW DIRECTIONAL LIGHT
   if (dirLightEnabled)
   {
-    shader.bind();
-    shader.setVec3("directionalLights[0].direction", dirLight.direction);
-    shader.setVec3("directionalLights[0].color", dirLight.color);
-    shader.setFloat("directionalLights[0].strength", dirLight.strength);
-    shader.setVec3("directionalLights[0].ambient", glm::vec3(ambient));
-    shader.setVec3("directionalLights[0].diffuse", glm::vec3(diffuse));
-    shader.setVec3("directionalLights[0].specular", glm::vec3(specular));
+    global_shader.bind();
+    global_shader.setVec3("directionalLights[0].direction", dirLight.direction);
+    global_shader.setVec3("directionalLights[0].color", dirLight.color);
+    global_shader.setFloat("directionalLights[0].strength", dirLight.strength);
+    global_shader.setVec3("directionalLights[0].ambient", glm::vec3(ambient));
+    global_shader.setVec3("directionalLights[0].diffuse", glm::vec3(diffuse));
+    global_shader.setVec3("directionalLights[0].specular", glm::vec3(specular));
   }
 
   // DRAW ALL POINT LIGHTS
@@ -490,18 +490,18 @@ void Renderer::drawLights(glm::mat4 view, glm::mat4 projection, Shader &shader)
 
     std::string lightstr = "pointLights";
     lightstr += "[" + std::to_string(i) + "]";
-    shader.bind();
-    shader.setVec3((lightstr + ".position").c_str(), pointLights[i].model.position);
-    shader.setVec3((lightstr + ".color").c_str(), pointLights[i].color);
+    global_shader.bind();
+    global_shader.setVec3((lightstr + ".position").c_str(), pointLights[i].model.position);
+    global_shader.setVec3((lightstr + ".color").c_str(), pointLights[i].color);
 
-    shader.setVec3((lightstr + ".ambient").c_str(), glm::vec3(0.05f));
-    shader.setVec3((lightstr + ".diffuse").c_str(), glm::vec3(diffuse));
-    shader.setVec3((lightstr + ".specular").c_str(), glm::vec3(specular));
+    global_shader.setVec3((lightstr + ".ambient").c_str(), glm::vec3(0.05f));
+    global_shader.setVec3((lightstr + ".diffuse").c_str(), glm::vec3(diffuse));
+    global_shader.setVec3((lightstr + ".specular").c_str(), glm::vec3(specular));
 
-    shader.setFloat((lightstr + ".strength").c_str(), pointLights[i].strength);
-    shader.setFloat((lightstr + ".constant").c_str(), 1.0f);
-    shader.setFloat((lightstr + ".linear").c_str(), 0.22f);
-    shader.setFloat((lightstr + ".quadratic").c_str(), 0.20f);
+    global_shader.setFloat((lightstr + ".strength").c_str(), pointLights[i].strength);
+    global_shader.setFloat((lightstr + ".constant").c_str(), 1.0f);
+    global_shader.setFloat((lightstr + ".linear").c_str(), 0.22f);
+    global_shader.setFloat((lightstr + ".quadratic").c_str(), 0.20f);
   }
 
   // DRAW ALL SPOTLIGHTS
@@ -518,22 +518,22 @@ void Renderer::drawLights(glm::mat4 view, glm::mat4 projection, Shader &shader)
 
     std::string lightstr = "spotlights";
     lightstr += "[" + std::to_string(i) + "]";
-    shader.bind();
-    shader.setVec3((lightstr + ".position").c_str(), spotLights[i].model.position);
-    shader.setVec3((lightstr + ".direction").c_str(), spotLights[i].direction);
-    shader.setVec3((lightstr + ".color").c_str(), spotLights[i].color);
+    global_shader.bind();
+    global_shader.setVec3((lightstr + ".position").c_str(), spotLights[i].model.position);
+    global_shader.setVec3((lightstr + ".direction").c_str(), spotLights[i].direction);
+    global_shader.setVec3((lightstr + ".color").c_str(), spotLights[i].color);
 
-    shader.setVec3((lightstr + ".ambient").c_str(), glm::vec3(0.05f));
-    shader.setVec3((lightstr + ".diffuse").c_str(), glm::vec3(diffuse));
-    shader.setVec3((lightstr + ".specular").c_str(), glm::vec3(specular));
+    global_shader.setVec3((lightstr + ".ambient").c_str(), glm::vec3(0.05f));
+    global_shader.setVec3((lightstr + ".diffuse").c_str(), glm::vec3(diffuse));
+    global_shader.setVec3((lightstr + ".specular").c_str(), glm::vec3(specular));
 
-    shader.setFloat((lightstr + ".strength").c_str(), spotLights[i].strength);
-    shader.setFloat((lightstr + ".constant").c_str(), 1.0f);
-    shader.setFloat((lightstr + ".linear").c_str(), 0.22f);
-    shader.setFloat((lightstr + ".quadratic").c_str(), 0.20f);
+    global_shader.setFloat((lightstr + ".strength").c_str(), spotLights[i].strength);
+    global_shader.setFloat((lightstr + ".constant").c_str(), 1.0f);
+    global_shader.setFloat((lightstr + ".linear").c_str(), 0.22f);
+    global_shader.setFloat((lightstr + ".quadratic").c_str(), 0.20f);
 
-    shader.setFloat((lightstr + ".cutOff").c_str(), glm::radians(spotLights[i].cutoff));
-    shader.setFloat((lightstr + ".outerCutOff").c_str(), glm::radians(spotLights[i].oCutoff));
+    global_shader.setFloat((lightstr + ".cutOff").c_str(), glm::radians(spotLights[i].cutoff));
+    global_shader.setFloat((lightstr + ".outerCutOff").c_str(), glm::radians(spotLights[i].oCutoff));
   }
 }
 

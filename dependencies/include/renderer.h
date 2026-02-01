@@ -48,7 +48,8 @@ struct SpotLight
   float strength;
 };
 
-struct Skybox {
+struct Skybox
+{
   VertexArray vao;
   VertexBuffer vbo;
   unsigned int texId = 0;
@@ -72,13 +73,14 @@ private:
 
   static ImGuiIO *io;
   static Shader lightShader;
-  static void drawLights(glm::mat4 view, glm::mat4 projection, Shader &shader);
+  static void drawLights(glm::mat4 view, glm::mat4 projection);
 
 public:
   static int width, height;
   static float ambient, diffuse, specular;
   static GLFWmousebuttonfun glfw_mouse_button_callback;
   static GLFWkeyfun glfw_key_callback;
+  static Shader global_shader;
 
   Renderer(const char *title, int width, int height, const char *glsl_version, bool vsync);
   ~Renderer();

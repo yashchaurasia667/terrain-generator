@@ -28,16 +28,17 @@ Camera camera(glm::vec3(0.0f, 0.0f, 0.0f), 45.0f, 0.1f, 2.5f);
 Renderer ren("renderer window", 1280, 720, "#version 330 core", true);
 
 float terrain_vertices[] = {
-    -50.0f, -1.0f, 50.0f,
-    50.0f, -1.0f, 50.0f,
-    50.0f, -1.0f, -50.0f,
+    -5.0f, -1.0f, 5.0f,
+    5.0f, -1.0f, 5.0f,
+    5.0f, -1.0f, -5.0f,
 
-    -50.0f, -1.0f, 50.0f,
-    50.0f, -1.0f, -50.0f,
-    -50.0f, -1.0f, -50.0f};
+    -5.0f, -1.0f, 5.0f,
+    5.0f, -1.0f, -5.0f,
+    -5.0f, -1.0f, -5.0f};
 
 VertexArray terrain_vao;
 VertexBuffer terrain_vbo(sizeof(terrain_vertices), terrain_vertices, GL_STATIC_DRAW);
+Shader terrainShader("../shaders/terrain.vs", "../shaders/terrain.fs");
 
 void createTerrain()
 {
@@ -79,13 +80,12 @@ void gameLoop(GLFWwindow *window, Shader &shader)
   glm::mat4 terrain_model = glm::mat4(1.0f);
   glm::vec3 pos = camera.getPos();
   pos.y = -1.0f;
-
   terrain_model = glm::translate(terrain_model, pos);
 
-  shader.bind();
-  shader.setMat4("view", view);
-  shader.setMat4("projection", projection);
-  shader.setMat4("model", terrain_model);
+  terrainShader.bind();
+  terrainShader.setMat4("view", view);
+  terrainShader.setMat4("projection", projection);
+  terrainShader.setMat4("model", terrain_model);
 
   terrain_vao.bind();
   glCall(glDrawArrays(GL_TRIANGLES, 0, 6));

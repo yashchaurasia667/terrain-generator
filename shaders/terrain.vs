@@ -2,15 +2,12 @@
 
 layout (location = 0) in vec3 aPos;
 
+uniform mat4 model;
 layout (std140) uniform matrices {
   mat4 view;
   mat4 projection;
 };
 
-out vec3 TexCoords;
-
 void main() {
-  TexCoords = aPos;
-  vec4 pos = projection * view * vec4(aPos, 1.0);
-  gl_Position = pos.xyww;
+  gl_Position = projection * view * model * vec4(aPos, 1.0);
 }

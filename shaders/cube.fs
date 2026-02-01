@@ -66,12 +66,13 @@ uniform vec3 viewPos;
 
 uniform Material material;
 
-uniform int numPointLights;
-uniform PointLight pointLights[MAX_POINT_LIGHTS];
-uniform int numDirectionalLights;
-uniform DirectionalLight directionalLights[MAX_DIRECTIONAL_LIGHTS];
-uniform int numSpotLights;
-uniform SpotLight spotlights[MAX_SPOT_LIGHTS];
+layout (std140) uniform lights {
+  DirectionalLight directionalLight;
+  int numPointLights;
+  PointLight pointLights[MAX_POINT_LIGHTS];
+  int numSpotLights;
+  SpotLight spotlights[MAX_SPOT_LIGHTS];
+};
 
 out vec4 FragColor;
 
@@ -96,8 +97,7 @@ void main()
   for(int i=0; i < numPointLights; i++)
     result += calculatePointLighting(pointLights[i], norm, FragPos, viewDir, vec3(diffuse_tex), vec3(specular_tex));
 
-  for(int i=0; i < numDirectionalLights; i++)
-    result += calculateDirectionalLighting(directionalLights[i], norm, viewDir, vec3(diffuse_tex), vec3(specular_tex));
+  result += calculateDirectionalLighting(directionalLight, norm, viewDir, vec3(diffuse_tex), vec3(specular_tex));
 
   for(int i=0; i < numSpotLights; i++)
     result += calculateSpotLighting(spotlights[i], norm, FragPos, viewDir, vec3(diffuse_tex), vec3(specular_tex));
