@@ -58,6 +58,14 @@ struct Skybox
   Skybox() = default;
 };
 
+struct Globals {
+  Shader shader;
+  int matrices_index;
+  unsigned int matrices;
+  int lights_index;
+  unsigned int lights;
+};
+
 class Renderer
 {
 private:
@@ -65,7 +73,6 @@ private:
   static GLFWwindow *window;
   static std::vector<Model> models;
 
-  static bool dirLightEnabled;
   static DirectionalLight dirLight;
   static std::vector<PointLight> pointLights;
   static std::vector<SpotLight> spotLights;
@@ -73,14 +80,14 @@ private:
 
   static ImGuiIO *io;
   static Shader lightShader;
-  static void drawLights(glm::mat4 view, glm::mat4 projection);
+  static void drawLights();
 
 public:
   static int width, height;
-  static float ambient, diffuse, specular;
+  static glm::vec3 ambient, diffuse, specular;
   static GLFWmousebuttonfun glfw_mouse_button_callback;
   static GLFWkeyfun glfw_key_callback;
-  static Shader global_shader;
+  static Globals *global;
 
   Renderer(const char *title, int width, int height, const char *glsl_version, bool vsync);
   ~Renderer();

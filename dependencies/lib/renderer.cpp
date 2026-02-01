@@ -10,9 +10,10 @@ GLFWwindow *Renderer::window = nullptr;
 std::vector<Model> Renderer::models;
 int Renderer::width = 0;
 int Renderer::height = 0;
-float Renderer::ambient = 0.3f, Renderer::diffuse = 1.0f, Renderer::specular = 1.0f;
+glm::vec3 Renderer::ambient = glm::vec3(0.3f);
+glm::vec3 Renderer::diffuse = glm::vec3(1.0f);
+glm::vec3 Renderer::specular = glm::vec3(1.0f);
 
-bool Renderer::dirLightEnabled = true;
 DirectionalLight Renderer::dirLight = {
     glm::vec3(0.0f),
     glm::vec3(1.0f),
@@ -23,7 +24,7 @@ std::vector<SpotLight> Renderer::spotLights;
 float Renderer::main_scale = 0.0f;
 ImGuiIO *Renderer::io = nullptr;
 Shader Renderer::lightShader;
-Shader Renderer::global_shader;
+Globals *Renderer::global;
 
 Skybox *Renderer::skybox = nullptr;
 
@@ -98,7 +99,33 @@ Renderer::Renderer(const char *title, int width, int height, const char *glsl_ve
   glfwSetMouseButtonCallback(window, GLFWMouseButtonCallback);
 
   lightShader = Shader("../shaders/light.vs", "../shaders/light.fs");
-  global_shader = Shader("../shaders/global.vs", "../shaders/default.fs");
+
+  // SETUP GLOBAL SHADERS UNIFORMS
+  global = new Globals();
+  global->shader = Shader("../shaders/global.vs", "../shaders/global.fs");
+
+  // view, proj matrices
+  glCall(glGenBuffers(1, &global->matrices));
+  glCall(glBindBuffer(GL_UNIFORM_BUFFER, global->matrices));
+
+  int size;
+  global->matrices_index = glGetUniformBlockIndex(global->shader.getId(), "matrices");
+  glCall(glGetActiveUniformBlockiv(global->shader.getId(), global->matrices_index, GL_UNIFORM_BLOCK_DATA_SIZE, &size));
+
+  glCall(glBufferData(GL_UNIFORM_BUFFER, size, NULL, GL_STATIC_DRAW));
+  // glCall(glBindBufferRange(GL_UNIFORM_BUFFER, 0, global->matrices, 0, size));
+  glCall(glBindBufferBase(GL_UNIFORM_BUFFER, 0, global->matrices));
+
+  // lights
+  glCall(glGenBuffers(1, &global->lights));
+  glCall(glBindBuffer(GL_UNIFORM_BUFFER, global->lights));
+
+  global->lights_index = glGetUniformBlockIndex(global->shader.getId(), "lights");
+  glCall(glGetActiveUniformBlockiv(global->shader.getId(), global->lights_index, GL_UNIFORM_BLOCK_DATA_SIZE, &size));
+
+  glCall(glBufferData(GL_UNIFORM_BUFFER, size, NULL, GL_STATIC_DRAW));
+  // glCall(glBindBufferRange(GL_UNIFORM_BUFFER, 0, global->lights, 0, size));
+  glCall(glBindBufferBase(GL_UNIFORM_BUFFER, 1, global->lights));
 
   // INITIALIZE SKYBOX
   float skyboxVertices[] = {
@@ -349,15 +376,21 @@ void Renderer::start(void (*game_loop)(GLFWwindow *window, Shader &shader), Shad
       ImGui::End();
     }
 
+    glm::mat4 view = camera.getViewMatrix();
+    glm::mat4 projection = glm::perspective(camera.getFov(), (float)Renderer::width / (float)Renderer::height, 0.1f, 100.0f);
+
+    glCall(glBindBuffer(GL_UNIFORM_BUFFER, global->matrices));
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(view)));
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(projection)));
+
+    unsigned int mat_index = glGetUniformBlockIndex(shader.getId(), "matrices"), light_index = glGetUniformBlockIndex(shader.getId(), "lights");
+    glCall(glUniformBlockBinding(shader.getId(), mat_index, 0));
+    glCall(glUniformBlockBinding(shader.getId(), light_index, 1));
+
     if (game_loop && window)
       game_loop(window, shader);
 
-    global_shader.setInt("numPointLights", pointLights.size());
-    global_shader.setInt("numSpotLights", spotLights.size());
-
-    glm::mat4 view = camera.getViewMatrix();
-    glm::mat4 projection = glm::perspective(camera.getFov(), (float)Renderer::width / (float)Renderer::height, 0.1f, 100.0f);
-    drawLights(view, projection);
+    drawLights();
 
     for (unsigned int i = 0; i < models.size(); i++)
       models[i].draw(shader);
@@ -365,14 +398,11 @@ void Renderer::start(void (*game_loop)(GLFWwindow *window, Shader &shader), Shad
     // DRAW SKYBOX
     glCall(glDepthFunc(GL_LEQUAL));
     skybox->shader.bind();
-    skybox->shader.setMat4("view", glm::mat4(glm::mat3(view)));
-    skybox->shader.setMat4("projection", projection);
 
     skybox->vao.bind();
     glCall(glActiveTexture(GL_TEXTURE0));
     glCall(glBindTexture(GL_TEXTURE_CUBE_MAP, skybox->texId));
     skybox->shader.setInt("skybox", 0);
-    // std::cout << "Skybox uniform location: " << glGetUniformLocation(skybox->shader.getId(), "skybox") << std::endl;
 
     glCall(glDrawArrays(GL_TRIANGLES, 0, 36));
     glCall(glDepthFunc(GL_LESS));
@@ -463,77 +493,119 @@ void Renderer::setErrorCallback(GLFWerrorfun callback)
 
 // ------------------------- HELPER FUNCTIONS ------------------------------------------
 
-void Renderer::drawLights(glm::mat4 view, glm::mat4 projection)
+void Renderer::drawLights()
 {
+  const char *queries[] = {
+      "directionalLight.direction",
+      "pointLights[0].position",
+      "spotlights[0].position",
+      "numPointLights",
+      "numSpotLights",
+  };
+  unsigned int indices[5];
+  int offsets[5];
+
+  glCall(glBindBuffer(GL_UNIFORM_BUFFER, global->lights));
+  glCall(glGetUniformIndices(global->shader.getId(), 5, queries, indices));
+  glCall(glGetActiveUniformsiv(global->shader.getId(), 5, indices, GL_UNIFORM_OFFSET, offsets));
+
+  // for (int index : offsets)
+  //   std::cout << index << std::endl;
+
+  int numPointLights = pointLights.size(), numSpotLights = spotLights.size();
+  glCall(glBufferSubData(GL_UNIFORM_BUFFER, offsets[3], sizeof(int), &numPointLights));
+  glCall(glBufferSubData(GL_UNIFORM_BUFFER, offsets[4], sizeof(int), &numSpotLights));
+
   // DRAW DIRECTIONAL LIGHT
-  if (dirLightEnabled)
   {
-    global_shader.bind();
-    global_shader.setVec3("directionalLights[0].direction", dirLight.direction);
-    global_shader.setVec3("directionalLights[0].color", dirLight.color);
-    global_shader.setFloat("directionalLights[0].strength", dirLight.strength);
-    global_shader.setVec3("directionalLights[0].ambient", glm::vec3(ambient));
-    global_shader.setVec3("directionalLights[0].diffuse", glm::vec3(diffuse));
-    global_shader.setVec3("directionalLights[0].specular", glm::vec3(specular));
+    glCall(glBindBuffer(GL_UNIFORM_BUFFER, global->lights));
+    unsigned int currOffset = offsets[0];
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &dirLight.direction));
+    currOffset += 16;
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &dirLight.color));
+    currOffset += 16;
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &ambient));
+    currOffset += 16;
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &diffuse));
+    currOffset += 16;
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &specular));
+    currOffset += 12;
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(float), &dirLight.strength));
   }
 
   // DRAW ALL POINT LIGHTS
+  glm::vec3 pointAmbient = glm::vec3(0.05f);
+  float constant = 1.0f, linear = 0.22f, quadratic = 0.20f;
+  unsigned int currOffset = offsets[1];
+
   for (unsigned int i = 0; i < pointLights.size(); i++)
   {
     glm::mat4 model = pointLights[i].model.getModelMatrix();
     lightShader.bind();
     lightShader.setMat4("model", model);
-    lightShader.setMat4("view", view);
-    lightShader.setMat4("projection", projection);
     lightShader.setVec3("color", pointLights[i].color);
     pointLights[i].model.draw(lightShader);
 
-    std::string lightstr = "pointLights";
-    lightstr += "[" + std::to_string(i) + "]";
-    global_shader.bind();
-    global_shader.setVec3((lightstr + ".position").c_str(), pointLights[i].model.position);
-    global_shader.setVec3((lightstr + ".color").c_str(), pointLights[i].color);
-
-    global_shader.setVec3((lightstr + ".ambient").c_str(), glm::vec3(0.05f));
-    global_shader.setVec3((lightstr + ".diffuse").c_str(), glm::vec3(diffuse));
-    global_shader.setVec3((lightstr + ".specular").c_str(), glm::vec3(specular));
-
-    global_shader.setFloat((lightstr + ".strength").c_str(), pointLights[i].strength);
-    global_shader.setFloat((lightstr + ".constant").c_str(), 1.0f);
-    global_shader.setFloat((lightstr + ".linear").c_str(), 0.22f);
-    global_shader.setFloat((lightstr + ".quadratic").c_str(), 0.20f);
+    glCall(glBindBuffer(GL_UNIFORM_BUFFER, global->lights));
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &pointLights[i].model.position));
+    currOffset += 16;
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &pointLights[i].color));
+    currOffset += 16;
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &pointAmbient));
+    currOffset += 16;
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &diffuse));
+    currOffset += 16;
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &specular));
+    currOffset += 12;
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(float), &pointLights[i].strength));
+    currOffset += 4;
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(float), &constant));
+    currOffset += 4;
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(float), &linear));
+    currOffset += 4;
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(float), &quadratic));
+    currOffset += 4;
   }
 
   // DRAW ALL SPOTLIGHTS
+  currOffset = offsets[2];
   for (unsigned int i = 0; i < spotLights.size(); i++)
   {
     glm::mat4 model = spotLights[i].model.getModelMatrix();
 
     lightShader.bind();
     lightShader.setMat4("model", model);
-    lightShader.setMat4("view", view);
-    lightShader.setMat4("projection", projection);
     lightShader.setVec3("color", spotLights[i].color);
     spotLights[i].model.draw(lightShader);
 
-    std::string lightstr = "spotlights";
-    lightstr += "[" + std::to_string(i) + "]";
-    global_shader.bind();
-    global_shader.setVec3((lightstr + ".position").c_str(), spotLights[i].model.position);
-    global_shader.setVec3((lightstr + ".direction").c_str(), spotLights[i].direction);
-    global_shader.setVec3((lightstr + ".color").c_str(), spotLights[i].color);
+    glCall(glBindBuffer(GL_UNIFORM_BUFFER, global->lights));
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &spotLights[i].model.position));
+    currOffset += 16;
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &spotLights[i].direction));
+    currOffset += 16;
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &spotLights[i].color));
+    currOffset += 16;
 
-    global_shader.setVec3((lightstr + ".ambient").c_str(), glm::vec3(0.05f));
-    global_shader.setVec3((lightstr + ".diffuse").c_str(), glm::vec3(diffuse));
-    global_shader.setVec3((lightstr + ".specular").c_str(), glm::vec3(specular));
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &pointAmbient));
+    currOffset += 16;
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &diffuse));
+    currOffset += 16;
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(glm::vec3), &specular));
+    currOffset += 12;
 
-    global_shader.setFloat((lightstr + ".strength").c_str(), spotLights[i].strength);
-    global_shader.setFloat((lightstr + ".constant").c_str(), 1.0f);
-    global_shader.setFloat((lightstr + ".linear").c_str(), 0.22f);
-    global_shader.setFloat((lightstr + ".quadratic").c_str(), 0.20f);
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(float), &constant));
+    currOffset += 4;
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(float), &linear));
+    currOffset += 4;
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(float), &quadratic));
+    currOffset += 4;
 
-    global_shader.setFloat((lightstr + ".cutOff").c_str(), glm::radians(spotLights[i].cutoff));
-    global_shader.setFloat((lightstr + ".outerCutOff").c_str(), glm::radians(spotLights[i].oCutoff));
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(float), &spotLights[i].strength));
+    currOffset += 4;
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(float), &spotLights[i].cutoff));
+    currOffset += 4;
+    glCall(glBufferSubData(GL_UNIFORM_BUFFER, currOffset, sizeof(float), &spotLights[i].oCutoff));
+    currOffset += 4;
   }
 }
 
