@@ -8,10 +8,7 @@ out vec3 FragPos;
 out vec2 TexCoords;
 
 uniform mat4 model;
-layout (std140) uniform matrices {
-  mat4 view;
-  mat4 projection;
-};
+;
 
 void main()
 {

@@ -56,7 +56,7 @@ int main()
   Renderer::setMouseButtonCallback(mouseButtonCallback);
   Renderer::setKeyCallback(processInput);
 
-  Shader def("../shaders/cube.vs", "../shaders/cube.fs");
+  Shader def("../shaders/cube.vs", "../shaders/cube.fs", true, true);
   createTerrain();
 
   Renderer::start(gameLoop, def, camera);
@@ -111,7 +111,7 @@ void processInput(GLFWwindow *window, int key, int scancode, int action, int mod
 
 void mouseButtonCallback(GLFWwindow *window, int button, int action, int mods)
 {
-  if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
+  if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
   {
     Renderer::setCursorMode(GLFW_CURSOR_DISABLED);
     Renderer::setCursorPosCallback(mouseCallback);
