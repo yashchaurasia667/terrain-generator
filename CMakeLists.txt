@@ -3,67 +3,65 @@ project(terrain_gen LANGUAGES C CXX)
 
 find_package(OpenGL REQUIRED)
 
-set(INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/include")
-set(LIB     "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/lib")
-set(SRC     "${CMAKE_CURRENT_SOURCE_DIR}/src")
+set(INCLUDE "/usr/local/include")
+set(LIB     "/usr/local/lib")
+set(SRC     "/usr/local/src")
+
+set(USR_DEP "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/")
+
+set(CODE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 # ImGui sources
-file(GLOB IMGUI_SOURCES "${LIB}/imgui/*.cpp")
-file(GLOB IMGUI_BACKEND_SOURCES "${LIB}/imgui/backends/*.cpp")
+file(GLOB IMGUI_SOURCES "${SRC}/imgui/*.cpp")
+file(GLOB IMGUI_BACKEND_SOURCES "${SRC}/imgui/backends/*.cpp")
 
 # Terrin gen sources
-file(GLOB TERRAIN_GEN_SRC "${SRC}/terrain_gen/*.cpp")
+file(GLOB TERRAIN_GEN_SRC "${CODE_SRC}/terrain_gen/*.cpp")
 
-# ---- Library with actual compiled code ----
 add_library(depends STATIC
-    "${LIB}/glad.c"
-    "${LIB}/shader.cpp"
-    "${LIB}/vertexBuffer.cpp"
-    "${LIB}/vertexBufferLayout.cpp"
-    "${LIB}/indexBuffer.cpp"
-    "${LIB}/vertexArray.cpp"
-    "${LIB}/camera.cpp"
-    "${LIB}/texture.cpp"
-    "${LIB}/utils.cpp"
-    "${LIB}/mesh.cpp"
-    "${LIB}/model.cpp"
-    "${LIB}/renderer.cpp"
-    ${TERRAIN_GEN_SRC}
-    ${IMGUI_SOURCES}
-    ${IMGUI_BACKEND_SOURCES}
+  "${USR_DEP}/lib/glad.c"
+  "${USR_DEP}/lib/shader.cpp"
+  "${USR_DEP}/lib/vertexBuffer.cpp"
+  "${USR_DEP}/lib/vertexBufferLayout.cpp"
+  "${USR_DEP}/lib/indexBuffer.cpp"
+  "${USR_DEP}/lib/vertexArray.cpp"
+  "${USR_DEP}/lib/camera.cpp"
+  "${USR_DEP}/lib/texture.cpp"
+  "${USR_DEP}/lib/utils.cpp"
+  "${USR_DEP}/lib/mesh.cpp"
+  "${USR_DEP}/lib/model.cpp"
+  "${USR_DEP}/lib/renderer.cpp"
+   ${TERRAIN_GEN_SRC}
+   ${IMGUI_SOURCES}
+   ${IMGUI_BACKEND_SOURCES}
 )
 
 target_include_directories(depends
     PUBLIC
-        "${SRC}/terrain_gen"
+        "${CODE_SOURCE}/terrain_gen"
         "${INCLUDE}"
         "${INCLUDE}/imgui"
         "${INCLUDE}/imgui/backends"
+        "${USR_DEP}/include"
 )
-
 target_compile_options(depends
     PRIVATE
         -Wall
         -Wextra
         -g
 )
-
 target_link_libraries(depends
     PUBLIC
         OpenGL::GL
         "${LIB}/libglfw3.a"
         "${LIB}/libassimp.a"
-        "${LIB}/libzlibstatic.a"
-        kernel32
-        user32
-        gdi32
+        minizip dl z pthread
+        X11 Xrandr Xi
 )
-
 # ---- Executable ----
 add_executable(${PROJECT_NAME}
-    "${SRC}/main.cpp"
+  "${CODE_SRC}/main.cpp"
 )
-
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
         depends

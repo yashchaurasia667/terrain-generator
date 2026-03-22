@@ -1,5 +1,7 @@
 #version 330 core
 
+out vec4 FragPos;
+
 #define MAX_POINT_LIGHTS 64
 #define MAX_SPOT_LIGHTS 8
 #define MAX_DIFFUSE_TEXTURES 4
@@ -54,3 +56,8 @@ layout (std140) uniform lights {
   int numPointLights;                             // 7248 -> 7252
   int numSpotLights;                              // 7252 -> 7256
 };
+
+
+void main() {
+//   FragPos = vec4(1.0);
+}
