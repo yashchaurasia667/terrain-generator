@@ -4,6 +4,7 @@ project(terrain LANGUAGES C CXX)
 find_package(OpenGL REQUIRED)
 find_package(glfw3 REQUIRED) 
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 

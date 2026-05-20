@@ -1,5 +1,5 @@
-#include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -9,16 +9,11 @@
 #include <imgui/imgui.h>
 
 #include <camera.h>
-#include <indexBuffer.h>
 #include <iostream>
 #include <shader.h>
-#include <vector>
-#include <vertexArray.h>
-#include <vertexBuffer.h>
-#include <vertexBufferLayout.h>
 
 unsigned int scr_width = 1280, scr_height = 720;
-bool camera_movement = false, wireframe = false;
+bool camera_movement = false;
 Camera camera(glm::vec3(0.0f), 45.0f, 0.1f, 2.5f);
 
 void framebufferSizeCallback(GLFWwindow *window, int width, int height);
@@ -54,63 +49,14 @@ int main() {
   ImGuiIO io = ImGui::GetIO();
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+
   ImGui_ImplGlfw_InitForOpenGL(window, false);
   ImGui_ImplOpenGL3_Init("#version 330 core");
 
   {
-    std::vector<float> vertices;
-    unsigned int rez = 20;
-    unsigned int width = 2000, height = 2000;
 
-    for (unsigned i = 0; i <= rez - 1; i++) {
-      for (unsigned j = 0; j <= rez - 1; j++) {
-        vertices.push_back(-width / 2.0f + width * i / (float)rez);   // v.x
-        vertices.push_back(0);                                        // v.y
-        vertices.push_back(-height / 2.0f + height * j / (float)rez); // v.z
-
-        vertices.push_back(i / (float)rez); // u
-        vertices.push_back(j / (float)rez); // v
-
-        vertices.push_back(-width / 2.0f + width * (i + 1) / (float)rez); // v.x
-        vertices.push_back(0);                                            // v.y
-        vertices.push_back(-height / 2.0f + height * j / (float)rez);     // v.z
-
-        vertices.push_back((i + 1) / (float)rez); // u
-        vertices.push_back(j / (float)rez);       // v
-
-        vertices.push_back(-width / 2.0f + width * (i + 1) / (float)rez); // v.x
-        vertices.push_back(0);                                            // v.y
-        vertices.push_back(-height / 2.0f +
-                           height * (j + 1) / (float)rez); // v.z
-
-        vertices.push_back((i + 1) / (float)rez); // u
-        vertices.push_back((j + 1) / (float)rez); // v
-
-        vertices.push_back(-width / 2.0f + width * i / (float)rez); // v.x
-        vertices.push_back(0);                                      // v.y
-        vertices.push_back(-height / 2.0f +
-                           height * (j + 1) / (float)rez); // v.z
-
-        vertices.push_back(i / (float)rez);       // u
-        vertices.push_back((j + 1) / (float)rez); // v
-      }
-    }
-    const unsigned int NUM_STRIPS = height - 1;
-    const unsigned int NUM_VERTS_PER_STRIP = width * 2;
-
-    VertexArray vao;
-    VertexBuffer vbo(vertices.size() * sizeof(float), &vertices[0],
-                     GL_STATIC_DRAW);
-    VertexBufferLayout layout;
-    layout.push<float>(3);
-    layout.push<float>(2);
-    vao.addBuffer(vbo, layout);
-
-    glPatchParameteri(GL_PATCH_VERTICES, 4);
     glClearColor(0.4, 0.4, 0.4, 0.4);
-
     while (!glfwWindowShouldClose(window)) {
-      glPolygonMode(GL_FRONT_AND_BACK, wireframe ? GL_LINE : GL_FILL);
       camera.updateFrame();
 
       glfwPollEvents();
@@ -123,7 +69,6 @@ int main() {
 
       {
         ImGui::Begin("Light params");
-        ImGui::Checkbox("wireframe", &wireframe);
         ImGui::End();
       }
 
