@@ -10,18 +10,17 @@
 #include <imgui/backends/imgui_impl_opengl3.h>
 #include <imgui/imgui.h>
 
-#include <iostream>
-#include <vector>
-
 #include <camera.h>
 #include <indexBuffer.h>
+#include <iostream>
 #include <shader.h>
+#include <vector>
 #include <vertexArray.h>
 #include <vertexBuffer.h>
 #include <vertexBufferLayout.h>
 
 unsigned int scr_width = 1280, scr_height = 720;
-bool camera_movement = false, wireframe = true;
+bool camera_movement = false, wireframe = false;
 Camera camera(glm::vec3(0.0f), 45.0f, 0.1f, 2.5f);
 
 void framebufferSizeCallback(GLFWwindow *window, int width, int height);
@@ -35,7 +34,6 @@ int main() {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
   GLFWwindow *window =
       glfwCreateWindow(scr_width, scr_height, "TITLE_HERE", NULL, NULL);
   if (window == nullptr) {
@@ -58,28 +56,48 @@ int main() {
   ImGuiIO io = ImGui::GetIO();
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
-
   ImGui_ImplGlfw_InitForOpenGL(window, false);
-  ImGui_ImplOpenGL3_Init("#version 330 core");
+  ImGui_ImplOpenGL3_Init("#version 410 core");
 
   {
-    Shader shader("../shaders/shader.vs", "../shaders/shader.fs");
-    int width = 2000, height = 2000;
+    Shader shader("../shaders/chunk.vs", "../shaders/chunk.fs", nullptr,
+                  "../shaders/tessellation.tcs", "../shaders/tessellation.tes");
 
     std::vector<float> vertices;
-    for (unsigned int i = 0; i < height; i++) {
-      for (unsigned int j = 0; j < width; j++) {
-        vertices.push_back(-width / 2.0f + j);
-        vertices.push_back(-height / 2.0f + i);
-        vertices.push_back(-5.0f);
-      }
-    }
-    std::vector<unsigned int> indices;
-    for (unsigned int i = 0; i < height - 1; i++) {
-      for (unsigned int j = 0; j < width; j++) {
-        for (unsigned int k = 0; k < 2; k++) {
-          indices.push_back(j + width * (i + k));
-        }
+    unsigned int rez = 20;
+    unsigned int width = 2000, height = 2000;
+
+    for (unsigned i = 0; i <= rez - 1; i++) {
+      for (unsigned j = 0; j <= rez - 1; j++) {
+        vertices.push_back(-width / 2.0f + width * i / (float)rez);   // v.x
+        vertices.push_back(0.0f);                                     // v.y
+        vertices.push_back(-height / 2.0f + height * j / (float)rez); // v.z
+
+        vertices.push_back(i / (float)rez); // u
+        vertices.push_back(j / (float)rez); // v
+
+        vertices.push_back(-width / 2.0f + width * (i + 1) / (float)rez); // v.x
+        vertices.push_back(0.0f); // v.y vertices.push_back(-height
+        vertices.push_back(-height / 2.0f + height * j / (float)rez); // v.z
+
+        vertices.push_back((i + 1) / (float)rez); // u
+        vertices.push_back(j / (float)rez);       // v
+
+        vertices.push_back(-width / 2.0f + width * i / (float)rez); // v.x
+        vertices.push_back(0.0f);                                   // v.y
+        vertices.push_back(-height / 2.0f +
+                           height * (j + 1) / (float)rez); // v.z
+                                                           //
+        vertices.push_back(i / (float)rez);                // u
+        vertices.push_back((j + 1) / (float)rez);          // v
+
+        vertices.push_back(-width / 2.0f + width * (i + 1) / (float)rez); // v.x
+        vertices.push_back(0.0f);                                         // v.y
+        vertices.push_back(-height / 2.0f +
+                           height * (j + 1) / (float)rez); // v.z
+                                                           
+        vertices.push_back((i + 1) / (float)rez);          // u
+        vertices.push_back((j + 1) / (float)rez);          // v
       }
     }
     const unsigned int NUM_STRIPS = height - 1;
@@ -88,71 +106,42 @@ int main() {
     VertexArray vao;
     VertexBuffer vbo(vertices.size() * sizeof(float), &vertices[0],
                      GL_STATIC_DRAW);
-    IndexBuffer ebo((int)indices.size() * sizeof(unsigned int), &indices[0],
-                    GL_STATIC_DRAW);
     VertexBufferLayout layout;
     layout.push<float>(3);
+    layout.push<float>(2);
     vao.addBuffer(vbo, layout);
 
-    // ------------------- SANITY CHECK ------------------------- //
-    Shader checkShader("../shaders/shader.vs", "../shaders/shader.fs");
-    float check_plane[] = {
-        -1.0f, -1.0f, -2.0f, 1.0f, -1.0f, -2.0f, 1.0f,  1.0f, -2.0f,
-        -1.0f, -1.0f, -2.0f, 1.0f, 1.0f,  -2.0f, -1.0f, 1.0f, -2.0f,
-    };
-    VertexArray check_vao;
-    VertexBuffer check_vbo(sizeof(check_plane), check_plane, GL_STATIC_DRAW);
-    VertexBufferLayout check_layout;
-    check_layout.push<float>(3);
-    check_vao.addBuffer(check_vbo, check_layout);
-    bool sanity_check = true;
-    // -------------------------------------------------------- //
+    glPatchParameteri(GL_PATCH_VERTICES, 4);
 
-    glClearColor(0.4, 0.4, 0.4, 0.4);
     while (!glfwWindowShouldClose(window)) {
       glPolygonMode(GL_FRONT_AND_BACK, wireframe ? GL_LINE : GL_FILL);
       camera.updateFrame();
+      processInput(window);
 
       glfwPollEvents();
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-      processInput(window);
 
       ImGui_ImplOpenGL3_NewFrame();
       ImGui_ImplGlfw_NewFrame();
       ImGui::NewFrame();
 
       {
-        ImGui::Begin("params");
+        ImGui::Begin("Light params");
         ImGui::Checkbox("wireframe", &wireframe);
-        ImGui::Checkbox("sanity check", &sanity_check);
         ImGui::End();
       }
 
+      shader.bind();
       glm::mat4 model = glm::mat4(1.0f);
       glm::mat4 view = camera.getViewMatrix();
       glm::mat4 projection = glm::perspective(
           camera.getFov(), (float)scr_width / (float)scr_height, 0.1f, 1000.0f);
 
-      if (sanity_check) {
-        checkShader.bind();
-        checkShader.setMat4("model", model);
-        checkShader.setMat4("view", view);
-        checkShader.setMat4("projection", projection);
-
-        check_vao.bind();
-        glDrawArrays(GL_TRIANGLES, 0, 6);
-      }
-shader.bind();
       shader.setMat4("model", model);
       shader.setMat4("view", view);
       shader.setMat4("projection", projection);
-
       vao.bind();
-      for (unsigned int strip = 0; strip < NUM_STRIPS; strip++) {
-        glDrawElements(
-            GL_TRIANGLE_STRIP, NUM_VERTS_PER_STRIP, GL_UNSIGNED_INT,
-            (void *)(sizeof(unsigned int) * NUM_VERTS_PER_STRIP * strip));
-      }
+      glDrawArrays(GL_PATCHES, 0, 4 * rez * rez);
 
       ImGui::Render();
       ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -165,7 +154,7 @@ shader.bind();
   ImGui_ImplGlfw_Shutdown();
   ImGui::DestroyContext();
   glfwTerminate();
-  return 0;
+  return 1;
 }
 
 void framebufferSizeCallback(GLFWwindow *window, int width, int height) {
@@ -177,7 +166,8 @@ void framebufferSizeCallback(GLFWwindow *window, int width, int height) {
 void processInput(GLFWwindow *window) {
   if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
     glfwSetWindowShouldClose(window, true);
-  camera.processMovement(window);
+  if (camera_movement)
+    camera.processMovement(window);
 }
 
 void cursorPosCallback(GLFWwindow *window, double xposin, double yposin) {
