@@ -2,6 +2,7 @@
 #include <GLFW/glfw3.h>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_float4x4.hpp>
+#include <glm/ext/vector_float2.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -19,11 +20,18 @@
 #include <vertexArray.h>
 #include <vertexBuffer.h>
 #include <vertexBufferLayout.h>
-
-unsigned int scr_width = 1280, scr_height = 720;
-bool camera_movement = false, wireframe = true, render_terrain = true;
+// GLOBAL VARIABLES
+bool camera_movement = false;
 Camera camera(glm::vec3(0.0f), 45.0f, 0.1f, 50.5f);
+unsigned int scr_width = 1280, scr_height = 720;
 
+// IMGUI PARAMS
+bool wireframe = true, sanity_check = true, render_terrain = true;
+int chunkWidth = 200, cellWidth = 100, noise_seed = 0;
+float tess_min_dist = 2, tess_max_dist = 200;
+unsigned int rez = 20;
+
+// FUNCTION DECLERATIONS
 void framebufferSizeCallback(GLFWwindow *window, int width, int height);
 void processInput(GLFWwindow *window);
 void cursorPosCallback(GLFWwindow *window, double xposin, double yposin);
@@ -36,7 +44,8 @@ int main() {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-  GLFWwindow *window = glfwCreateWindow(scr_width, scr_height, "Terrain Generator", NULL, NULL);
+  GLFWwindow *window =
+      glfwCreateWindow(scr_width, scr_height, "Terrain Generator", NULL, NULL);
   if (window == nullptr) {
     std::cout << "Failed to create a GLFW window" << std::endl;
     glfwTerminate();
@@ -62,47 +71,49 @@ int main() {
   ImGui_ImplOpenGL3_Init("#version 430 core");
 
   {
-    Shader shader("../shaders/chunk_vert.glsl", "../shaders/chunk_frag.glsl", nullptr,
-                  "../shaders/tessellation_control.glsl", "../shaders/tessellation_evaluation.glsl");
+    Shader shader("../shaders/chunk_vert.glsl", "../shaders/chunk_frag.glsl",
+                  nullptr, "../shaders/tessellation_control.glsl",
+                  "../shaders/tessellation_evaluation.glsl");
     ComputeShader noiseShader("../shaders/noise_compute.glsl");
-
-    int width = 200, height = 200;
-    unsigned int rez = 20;
 
     std::vector<float> vertices;
     for (unsigned int i = 0; i < rez; i++) {
       for (unsigned int j = 0; j < rez; j++) {
-        vertices.push_back(-width / 2.0f + (width * i) / (float)rez);   // v.x
-        vertices.push_back(0.0f);                                       // v.y
-        vertices.push_back(-height / 2.0f + (height * j) / (float)rez); // v.z
-        vertices.push_back(i / (float)rez);                             // u
-        vertices.push_back(j / (float)rez);                             // v
+        vertices.push_back(-chunkWidth / 2.0f +
+                           (chunkWidth * i) / (float)rez); // v.x
+        vertices.push_back(0.0f);                          // v.y
+        vertices.push_back(-chunkWidth / 2.0f +
+                           (chunkWidth * j) / (float)rez); // v.z
+        vertices.push_back(i / (float)rez);                // u
+        vertices.push_back(j / (float)rez);                // v
 
-        vertices.push_back(-width / 2.0f +
-                           (width * (i + 1)) / (float)rez);             // v.x
-        vertices.push_back(0.0f);                                       // v.y
-        vertices.push_back(-height / 2.0f + (height * j) / (float)rez); // v.z
-        vertices.push_back((i + 1) / (float)rez);                       // u
-        vertices.push_back(j / (float)rez);                             // v
+        vertices.push_back(-chunkWidth / 2.0f +
+                           (chunkWidth * (i + 1)) / (float)rez); // v.x
+        vertices.push_back(0.0f);                                // v.y
+        vertices.push_back(-chunkWidth / 2.0f +
+                           (chunkWidth * j) / (float)rez); // v.z
+        vertices.push_back((i + 1) / (float)rez);          // u
+        vertices.push_back(j / (float)rez);                // v
 
-        vertices.push_back(-width / 2.0f + (width * i) / (float)rez); // v.x
-        vertices.push_back(0.0f);                                     // v.y
-        vertices.push_back(-height / 2.0f +
-                           (height * (j + 1)) / (float)rez); // v.z
-        vertices.push_back(i / (float)rez);                  // u
-        vertices.push_back((j + 1) / (float)rez);            // v
+        vertices.push_back(-chunkWidth / 2.0f +
+                           (chunkWidth * i) / (float)rez); // v.x
+        vertices.push_back(0.0f);                          // v.y
+        vertices.push_back(-chunkWidth / 2.0f +
+                           (chunkWidth * (j + 1)) / (float)rez); // v.z
+        vertices.push_back(i / (float)rez);                      // u
+        vertices.push_back((j + 1) / (float)rez);                // v
 
-        vertices.push_back(-width / 2.0f +
-                           (width * (i + 1)) / (float)rez); // v.x
-        vertices.push_back(0.0f);                           // v.y
-        vertices.push_back(-height / 2.0f +
-                           (height * (j + 1)) / (float)rez); // v.z
-        vertices.push_back((i + 1) / (float)rez);            // u
-        vertices.push_back((j + 1) / (float)rez);            // v
+        vertices.push_back(-chunkWidth / 2.0f +
+                           (chunkWidth * (i + 1)) / (float)rez); // v.x
+        vertices.push_back(0.0f);                                // v.y
+        vertices.push_back(-chunkWidth / 2.0f +
+                           (chunkWidth * (j + 1)) / (float)rez); // v.z
+        vertices.push_back((i + 1) / (float)rez);                // u
+        vertices.push_back((j + 1) / (float)rez);                // v
       }
     }
-    const unsigned int NUM_STRIPS = height - 1;
-    const unsigned int NUM_VERTS_PER_STRIP = width * 2;
+    const unsigned int NUM_STRIPS = chunkWidth - 1;
+    const unsigned int NUM_VERTS_PER_STRIP = chunkWidth * 2;
 
     VertexArray vao;
     VertexBuffer vbo(vertices.size() * sizeof(float), &vertices[0],
@@ -112,8 +123,20 @@ int main() {
     layout.push<float>(2);
     vao.addBuffer(vbo, layout);
 
+    unsigned int noise_tex;
+    glGenTextures(1, &noise_tex);
+    glBindTexture(GL_TEXTURE_2D, noise_tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, chunkWidth, chunkWidth, 0,
+                 GL_RGBA, GL_FLOAT, nullptr);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
     // ------------------- SANITY CHECK ------------------------- //
-    Shader checkShader("../shaders/shader_vert_default.glsl", "../shaders/shader_frag_default.glsl");
+    Shader checkShader("../shaders/shader_vert_default.glsl",
+                       "../shaders/shader_frag_default.glsl");
     float check_plane[] = {
         -1.0f, -1.0f, -2.0f, 1.0f, -1.0f, -2.0f, 1.0f,  1.0f, -2.0f,
         -1.0f, -1.0f, -2.0f, 1.0f, 1.0f,  -2.0f, -1.0f, 1.0f, -2.0f,
@@ -123,7 +146,6 @@ int main() {
     VertexBufferLayout check_layout;
     check_layout.push<float>(3);
     check_vao.addBuffer(check_vbo, check_layout);
-    bool sanity_check = true;
     // -------------------------------------------------------- //
 
     glPatchParameteri(GL_PATCH_VERTICES, 4);
@@ -139,13 +161,29 @@ int main() {
       ImGui_ImplOpenGL3_NewFrame();
       ImGui_ImplGlfw_NewFrame();
       ImGui::NewFrame();
-
       {
-        ImGui::Begin("params");
-        ImGui::Checkbox("wireframe", &wireframe);
-        ImGui::Checkbox("sanity check", &sanity_check);
-        ImGui::Checkbox("render terrain", &render_terrain);
-        ImGui::End();
+        {
+          ImGui::Begin("debug");
+          ImGui::Checkbox("wireframe", &wireframe);
+          ImGui::Checkbox("sanity check", &sanity_check);
+          ImGui::Checkbox("render terrain", &render_terrain);
+          ImGui::End();
+        }
+        {
+          ImGui::Begin("chunk");
+          ImGui::InputInt("chunk width", &chunkWidth);
+          ImGui::InputInt("cell width", &cellWidth);
+          ImGui::InputInt("noise seed", &noise_seed);
+          ImGui::End();
+        }
+        {
+          ImGui::Begin("Tessellation");
+          ImGui::SliderFloat("min tessellation distance", &tess_min_dist, 0.0f,
+                             100.0f);
+          ImGui::SliderFloat("max tessellation distance", &tess_max_dist, 1.0f,
+                             1000.0f);
+          ImGui::End();
+        }
       }
 
       glm::mat4 model = glm::mat4(1.0f);
@@ -165,11 +203,25 @@ int main() {
       }
 
       if (render_terrain) {
+        noiseShader.bind();
+        noiseShader.setInt("u_seed", noise_seed);
+        noiseShader.setVec2("u_chunkOffset", glm::vec2(0.0f));
+        noiseShader.setInt("u_cellWidth", cellWidth);
+        noiseShader.setInt("u_chunkWidth", chunkWidth);
+
+        glBindImageTexture(0, noise_tex, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+        noiseShader.setInt("u_heightMap", 0);
+        glDispatchCompute((chunkWidth + 15) / 16, (chunkWidth + 15) / 16, 1);
+        glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
+
         shader.bind();
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, noise_tex);
+        shader.setInt("heightMap", 0);
+
         shader.setMat4("model", model);
         shader.setMat4("view", view);
         shader.setMat4("projection", projection);
-        shader.setInt("noiseSeed", 1);
 
         vao.bind();
         glDrawArrays(GL_PATCHES, 0, rez * rez * 4);
