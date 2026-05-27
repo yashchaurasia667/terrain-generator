@@ -14,7 +14,7 @@ vec3 directions[] = {
     vec3(1, 0, 1), vec3(-1, 0, 1), vec3(1, 0, -1), vec3(-1, 0, -1),
     vec3(0, 1, 1), vec3(0, 1, -1), vec3(0, -1, 1), vec3(0, -1, -1),
     vec3(1, 1, 0), vec3(-1, 1, 0), vec3(1, -1, 0), vec3(-1, -1, 0),
-  };
+};
 
 int perm[256] = int[256](
     151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194, 233, 7, 225,
@@ -59,8 +59,8 @@ float cerp(float v0, float v1, float t) {
 }
 
 int pickGradient(int x, int y) {
-  int ix = x & 255;
-  int iy = y & 255;
+  int ix = (x ^ u_seed) & 255;
+  int iy = (y ^ u_seed) & 255;
   return perm[(perm[ix] + iy) & 255] & 15;
 }
 

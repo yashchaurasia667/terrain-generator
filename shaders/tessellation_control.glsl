@@ -1,30 +1,35 @@
 #version 430 core
 
-layout (vertices=4) out;
+layout(vertices = 4) out;
 
 uniform mat4 model;
 uniform mat4 view;
+
+uniform int MIN_TESS_LEVEL;
+uniform int MAX_TESS_LEVEL;
+uniform float MIN_DISTANCE;
+uniform float MAX_DISTANCE;
 
 in vec2 TexCoords[];
 out vec2 TextureCoords[];
 
 in gl_PerVertex
 {
-	vec4 gl_Position;
-	float gl_PointSize;
-	float gl_ClipDistance[];
+  vec4 gl_Position;
+  float gl_PointSize;
+  float gl_ClipDistance[];
 } gl_in[gl_MaxPatchVertices];
 
 void main() {
   gl_out[gl_InvocationID].gl_Position = gl_in[gl_InvocationID].gl_Position;
   TextureCoords[gl_InvocationID] = TexCoords[gl_InvocationID];
 
-  if(gl_InvocationID == 0)
+  if (gl_InvocationID == 0)
   {
-    const int MIN_TESS_LEVEL = 4;
-    const int MAX_TESS_LEVEL = 64;
-    const float MIN_DISTANCE = 100;
-    const float MAX_DISTANCE = 1000;
+    // const int MIN_TESS_LEVEL = 4;
+    // const int MAX_TESS_LEVEL = 64;
+    // const float MIN_DISTANCE = 100;
+    // const float MAX_DISTANCE = 1000;
 
     vec4 eyeSpacePos00 = view * model * gl_in[0].gl_Position;
     vec4 eyeSpacePos01 = view * model * gl_in[1].gl_Position;

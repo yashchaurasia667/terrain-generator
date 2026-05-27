@@ -8,5 +8,6 @@ in float Height;
 
 void main() {
   float h = (Height + 16) / 64.0;
+  // FragColor = vec4(0.4, 0.2, 0.1, 1.0);
   FragColor = vec4(h, h, h, 1.0);
 }

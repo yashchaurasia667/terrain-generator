@@ -1,8 +1,6 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#include <glm/ext/matrix_clip_space.hpp>
-#include <glm/ext/matrix_float4x4.hpp>
-#include <glm/ext/vector_float2.hpp>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -17,20 +15,17 @@
 #include <camera.h>
 #include <indexBuffer.h>
 #include <shader.h>
+#include <terrain.h>
 #include <vertexArray.h>
 #include <vertexBuffer.h>
 #include <vertexBufferLayout.h>
-
 // GLOBAL VARIABLES
 bool camera_movement = false;
 Camera camera(glm::vec3(0.0f), 45.0f, 0.1f, 50.5f);
 unsigned int scr_width = 1280, scr_height = 720;
 
 // IMGUI PARAMS
-bool wireframe = true, sanity_check = true, render_terrain = true;
-int chunkWidth = 1000, cellWidth = 150, noise_seed = 0;
-float tess_min_dist = 2, tess_max_dist = 200;
-unsigned int rez = 20;
+bool wireframe = false, sanity_check = false, render_terrain = true;
 
 // FUNCTION DECLERATIONS
 void framebufferSizeCallback(GLFWwindow *window, int width, int height);
@@ -72,63 +67,18 @@ int main() {
   ImGui_ImplOpenGL3_Init("#version 430 core");
 
   {
-    Shader shader("../shaders/chunk_vert.glsl", "../shaders/chunk_frag.glsl",
-                  nullptr, "../shaders/tessellation_control.glsl",
-                  "../shaders/tessellation_evaluation.glsl");
     ComputeShader noiseShader("../shaders/noise_compute.glsl");
-
-    std::vector<float> vertices;
-    for (unsigned int i = 0; i < rez; i++) {
-      for (unsigned int j = 0; j < rez; j++) {
-        vertices.push_back(-chunkWidth / 2.0f +
-                           (chunkWidth * i) / (float)rez); // v.x
-        vertices.push_back(0.0f);                          // v.y
-        vertices.push_back(-chunkWidth / 2.0f +
-                           (chunkWidth * j) / (float)rez); // v.z
-        vertices.push_back(i / (float)rez);                // u
-        vertices.push_back(j / (float)rez);                // v
-
-        vertices.push_back(-chunkWidth / 2.0f +
-                           (chunkWidth * (i + 1)) / (float)rez); // v.x
-        vertices.push_back(0.0f);                                // v.y
-        vertices.push_back(-chunkWidth / 2.0f +
-                           (chunkWidth * j) / (float)rez); // v.z
-        vertices.push_back((i + 1) / (float)rez);          // u
-        vertices.push_back(j / (float)rez);                // v
-
-        vertices.push_back(-chunkWidth / 2.0f +
-                           (chunkWidth * i) / (float)rez); // v.x
-        vertices.push_back(0.0f);                          // v.y
-        vertices.push_back(-chunkWidth / 2.0f +
-                           (chunkWidth * (j + 1)) / (float)rez); // v.z
-        vertices.push_back(i / (float)rez);                      // u
-        vertices.push_back((j + 1) / (float)rez);                // v
-
-        vertices.push_back(-chunkWidth / 2.0f +
-                           (chunkWidth * (i + 1)) / (float)rez); // v.x
-        vertices.push_back(0.0f);                                // v.y
-        vertices.push_back(-chunkWidth / 2.0f +
-                           (chunkWidth * (j + 1)) / (float)rez); // v.z
-        vertices.push_back((i + 1) / (float)rez);                // u
-        vertices.push_back((j + 1) / (float)rez);                // v
-      }
-    }
-    const unsigned int NUM_STRIPS = chunkWidth - 1;
-    const unsigned int NUM_VERTS_PER_STRIP = chunkWidth * 2;
-
-    VertexArray vao;
-    VertexBuffer vbo(vertices.size() * sizeof(float), &vertices[0],
-                     GL_STATIC_DRAW);
-    VertexBufferLayout layout;
-    layout.push<float>(3);
-    layout.push<float>(2);
-    vao.addBuffer(vbo, layout);
+    Terrain terrain;
+    terrain.initShader("../shaders/chunk_vert.glsl",
+                       "../shaders/chunk_frag.glsl", nullptr,
+                       "../shaders/tessellation_control.glsl",
+                       "../shaders/tessellation_evaluation.glsl");
 
     unsigned int noise_tex;
     glGenTextures(1, &noise_tex);
     glBindTexture(GL_TEXTURE_2D, noise_tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, chunkWidth, chunkWidth, 0,
-                 GL_RGBA, GL_FLOAT, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, terrain.chunkWidth,
+                 terrain.chunkWidth, 0, GL_RGBA, GL_FLOAT, nullptr);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -172,17 +122,35 @@ int main() {
         }
         {
           ImGui::Begin("chunk");
-          ImGui::InputInt("chunk width", &chunkWidth);
-          ImGui::InputInt("cell width", &cellWidth);
-          ImGui::InputInt("noise seed", &noise_seed);
+          ImGui::InputInt("chunk width", &terrain.chunkWidth);
+          ImGui::InputInt("cell width", &terrain.cellWidth);
+          ImGui::InputInt("noise seed", &terrain.noiseSeed);
+          if (ImGui::Button("Reinitialize terrain")) {
+            terrain.generateVertices();
+            terrain.uploadVertexData();
+            // vertices = generateVertices(terrain.chunkWidth, terrain.rez);
+            // vao.bind();
+            // vbo.bind();
+            // vbo.setData(vertices.size() * sizeof(float), &vertices[0],
+            //             GL_STATIC_DRAW);
+          }
           ImGui::End();
         }
         {
           ImGui::Begin("Tessellation");
-          ImGui::SliderFloat("min tessellation distance", &tess_min_dist, 0.0f,
-                             100.0f);
-          ImGui::SliderFloat("max tessellation distance", &tess_max_dist, 1.0f,
-                             1000.0f);
+          if (ImGui::CollapsingHeader("TESS DISTANCE")) {
+            ImGui::SliderFloat("min tessellation distance",
+                               &terrain.tess_min_dist, 0.0f, 100.0f);
+            ImGui::SliderFloat("max tessellation distance",
+                               &terrain.tess_max_dist, 1.0f, 10000.0f);
+          }
+
+          if (ImGui::CollapsingHeader("TESS LEVEL")) {
+            ImGui::SliderInt("min tessellation level", &terrain.tess_min_level,
+                             0.0f, 64.0f);
+            ImGui::SliderInt("max tessellation level", &terrain.tess_max_level,
+                             4.0f, 128.0f);
+          }
           ImGui::End();
         }
       }
@@ -205,28 +173,22 @@ int main() {
 
       if (render_terrain) {
         noiseShader.bind();
-        noiseShader.setInt("u_seed", noise_seed);
+        noiseShader.setInt("u_seed", terrain.noiseSeed);
         noiseShader.setVec2("u_chunkOffset", glm::vec2(0.0f));
-        noiseShader.setInt("u_cellWidth", cellWidth);
-        noiseShader.setInt("u_chunkWidth", chunkWidth);
+        noiseShader.setInt("u_cellWidth", terrain.cellWidth);
+        noiseShader.setInt("u_chunkWidth", terrain.chunkWidth);
 
         glBindImageTexture(0, noise_tex, 0, GL_FALSE, 0, GL_READ_WRITE,
                            GL_RGBA32F);
         noiseShader.setInt("u_heightMap", 0);
-        glDispatchCompute((chunkWidth + 15) / 16, (chunkWidth + 15) / 16, 1);
+        glDispatchCompute((terrain.chunkWidth + 15) / 16,
+                          (terrain.chunkWidth + 15) / 16, 1);
         glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
 
-        shader.bind();
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, noise_tex);
-        shader.setInt("heightMap", 0);
 
-        shader.setMat4("model", model);
-        shader.setMat4("view", view);
-        shader.setMat4("projection", projection);
-
-        vao.bind();
-        glDrawArrays(GL_PATCHES, 0, rez * rez * 4);
+        terrain.render(camera, model, projection, 0);
       }
 
       ImGui::Render();
