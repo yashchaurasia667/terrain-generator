@@ -20,6 +20,7 @@
 #include <vertexArray.h>
 #include <vertexBuffer.h>
 #include <vertexBufferLayout.h>
+
 // GLOBAL VARIABLES
 bool camera_movement = false;
 Camera camera(glm::vec3(0.0f), 45.0f, 0.1f, 50.5f);
@@ -27,7 +28,7 @@ unsigned int scr_width = 1280, scr_height = 720;
 
 // IMGUI PARAMS
 bool wireframe = true, sanity_check = true, render_terrain = true;
-int chunkWidth = 200, cellWidth = 100, noise_seed = 0;
+int chunkWidth = 1000, cellWidth = 150, noise_seed = 0;
 float tess_min_dist = 2, tess_max_dist = 200;
 unsigned int rez = 20;
 
@@ -209,7 +210,8 @@ int main() {
         noiseShader.setInt("u_cellWidth", cellWidth);
         noiseShader.setInt("u_chunkWidth", chunkWidth);
 
-        glBindImageTexture(0, noise_tex, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+        glBindImageTexture(0, noise_tex, 0, GL_FALSE, 0, GL_READ_WRITE,
+                           GL_RGBA32F);
         noiseShader.setInt("u_heightMap", 0);
         glDispatchCompute((chunkWidth + 15) / 16, (chunkWidth + 15) / 16, 1);
         glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
