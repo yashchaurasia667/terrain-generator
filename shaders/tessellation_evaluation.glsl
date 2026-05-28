@@ -1,45 +1,48 @@
 #version 430 core
-
 layout(quads, fractional_odd_spacing, ccw) in;
 
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
 uniform sampler2D heightMap;
+uniform float u_amplitude;
 
 in vec2 TextureCoords[];
 
 out vec2 TexCoords;
 out float Height;
+out vec3 FragPos;
+out vec3 Normal;
 
-void main()
-{
+void main() {
   float u = gl_TessCoord.x;
   float v = gl_TessCoord.y;
 
-  vec2 t00 = TextureCoords[0];
-  vec2 t01 = TextureCoords[1];
-  vec2 t10 = TextureCoords[2];
-  vec2 t11 = TextureCoords[3];
+  // bilinear interpolation of UVs
+  vec2 t0 = (TextureCoords[1] - TextureCoords[0]) * u + TextureCoords[0];
+  vec2 t1 = (TextureCoords[3] - TextureCoords[2]) * u + TextureCoords[2];
+  TexCoords = (t1 - t0) * v + t0; // no vec2 type here — assigns to out variable
 
-  vec2 t0 = (t01 - t00) * u + t00;
-  vec2 t1 = (t11 - t10) * u + t10;
-  vec2 TexCoords = (t1 - t0) * v + t0;
+  // sample height and apply amplitude
+  Height = texture(heightMap, TexCoords).r - u_amplitude;
 
-  Height = texture(heightMap, TexCoords).y;
+  // finite difference normal from heightmap
+  vec2 texelSize = vec2(1.0) / vec2(textureSize(heightMap, 0));
+  float hL = texture(heightMap, TexCoords - vec2(texelSize.x, 0.0)).r * u_amplitude;
+  float hR = texture(heightMap, TexCoords + vec2(texelSize.x, 0.0)).r * u_amplitude;
+  float hD = texture(heightMap, TexCoords - vec2(0.0, texelSize.y)).r * u_amplitude;
+  float hU = texture(heightMap, TexCoords + vec2(0.0, texelSize.y)).r * u_amplitude;
+  // the 2.0 in Y controls normal smoothness — increase to flatten normals
+  Normal = normalize(vec3(hL - hR, 2.0, hD - hU));
 
-  vec4 p00 = gl_in[0].gl_Position;
-  vec4 p01 = gl_in[1].gl_Position;
-  vec4 p10 = gl_in[2].gl_Position;
-  vec4 p11 = gl_in[3].gl_Position;
+  // bilinear interpolation of position
+  vec4 p0 = (gl_in[1].gl_Position - gl_in[0].gl_Position) * u + gl_in[0].gl_Position;
+  vec4 p1 = (gl_in[3].gl_Position - gl_in[2].gl_Position) * u + gl_in[2].gl_Position;
+  vec4 p = (p1 - p0) * v + p0;
 
-  vec4 uVec = p01 - p00;
-  vec4 vVec = p10 - p00;
-  vec4 normal = normalize(vec4(cross(vVec.xyz, uVec.xyz), 0));
+  // displace along Y
+  p.y += Height;
 
-  vec4 p0 = (p01 - p00) * u + p00;
-  vec4 p1 = (p11 - p10) * u + p10;
-  vec4 p = (p1 - p0) * v + p0 + normal * Height;
-
+  FragPos = vec3(model * p);
   gl_Position = projection * view * model * p;
 }

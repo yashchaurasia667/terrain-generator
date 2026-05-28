@@ -40,6 +40,24 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action,
                  int mods);
 void charCallback(GLFWwindow *window, unsigned int codepoint);
 
+void runNoiseShader(ComputeShader &noiseShader, Terrain &terrain,
+                    unsigned int noise_tex) {
+  noiseShader.bind();
+  noiseShader.setInt("u_seed", terrain.noiseSeed);
+  noiseShader.setVec2("u_chunkOffset", glm::vec2(0.0f));
+  noiseShader.setInt("u_cellWidth", terrain.cellWidth);
+  noiseShader.setInt("u_chunkWidth", terrain.chunkWidth);
+  noiseShader.setInt("u_noisePass", noisePass);
+  noiseShader.setFloat("u_amplitude", amp);
+  noiseShader.setFloat("u_frequency", freq);
+
+  glBindImageTexture(0, noise_tex, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+  noiseShader.setInt("u_heightMap", 0);
+  glDispatchCompute((terrain.chunkWidth + 15) / 16,
+                    (terrain.chunkWidth + 15) / 16, 1);
+  glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
+}
+
 int main() {
   glfwInit();
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -106,6 +124,7 @@ int main() {
     check_layout.push<float>(3);
     check_vao.addBuffer(check_vbo, check_layout);
     // -------------------------------------------------------- //
+    //
 
     glPatchParameteri(GL_PATCH_VERTICES, 4);
     glClearColor(0.4, 0.4, 0.4, 0.4);
@@ -133,9 +152,13 @@ int main() {
           ImGui::InputInt("chunk width", &terrain.chunkWidth);
           ImGui::InputInt("cell width", &terrain.cellWidth);
           ImGui::InputInt("noise seed", &terrain.noiseSeed);
+          ImGui::SliderFloat("amplitude", &amp, 0.0f, 1000.0f);
+          ImGui::SliderFloat("frequency", &freq, 0.0f, 64.0f);
+          ImGui::SliderInt("nosie pass", &noisePass, 1, 64);
           if (ImGui::Button("Reinitialize terrain")) {
             terrain.generateVertices();
             terrain.uploadVertexData();
+            // runNoiseShader(noiseShader, terrain, noise_tex);
           }
           ImGui::End();
         }
@@ -153,9 +176,6 @@ int main() {
             ImGui::SliderInt("max tessellation level", &terrain.tess_max_level,
                              4.0f, 128.0f);
           }
-          ImGui::SliderFloat("amplitude", &amp, 0.0f, 1000.0f);
-          ImGui::SliderFloat("frequency", &freq, 0.0f, 64.0f);
-          ImGui::SliderInt("nosie pass", &noisePass, 1, 64);
           ImGui::End();
         }
       }
@@ -177,6 +197,7 @@ int main() {
       }
 
       if (render_terrain) {
+
         noiseShader.bind();
         noiseShader.setInt("u_seed", terrain.noiseSeed);
         noiseShader.setVec2("u_chunkOffset", glm::vec2(0.0f));
@@ -198,6 +219,9 @@ int main() {
 
         terrain.shader.bind();
         terrain.shader.setFloat("u_amplitude", amp);
+        terrain.shader.setVec3("u_lightDir",
+                               glm::normalize(glm::vec3(0.6f, 1.0f, 0.4f)));
+        terrain.shader.setVec3("u_viewPos", camera.getPos());
         terrain.render(camera, model, projection, 0);
       }
 
