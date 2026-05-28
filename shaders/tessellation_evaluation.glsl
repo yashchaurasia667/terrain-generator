@@ -5,7 +5,9 @@ uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
 uniform sampler2D heightMap;
+
 uniform float u_amplitude;
+uniform int u_noisePass;
 
 in vec2 TextureCoords[];
 
@@ -24,7 +26,7 @@ void main() {
   TexCoords = (t1 - t0) * v + t0; // no vec2 type here — assigns to out variable
 
   // sample height and apply amplitude
-  Height = texture(heightMap, TexCoords).r - u_amplitude;
+  Height = texture(heightMap, TexCoords).r * u_amplitude;
 
   // finite difference normal from heightmap
   vec2 texelSize = vec2(1.0) / vec2(textureSize(heightMap, 0));

@@ -16,7 +16,7 @@
 class Terrain {
 public:
   int chunkWidth, cellWidth, noiseSeed;
-  float tess_min_dist = 10, tess_max_dist = 400;
+  float tess_min_dist = 10, tess_max_dist = 800;
   int tess_min_level = 4, tess_max_level = 64;
   unsigned int rez = 20;
   Shader shader;

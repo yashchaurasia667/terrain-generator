@@ -9,26 +9,13 @@ uniform writeonly image2D u_heightMap;
 uniform int u_cellWidth;
 uniform int u_chunkWidth;
 uniform int u_noisePass;
-uniform float u_amplitude;
 uniform float u_frequency;
 
 vec3 directions[] = {
-    vec3(1, 1, 0),
-    vec3(-1, 1, 0),
-    vec3(1, -1, 0),
-    vec3(-1, -1, 0),
-    vec3(1, 0, 1),
-    vec3(-1, 0, 1),
-    vec3(1, 0, -1),
-    vec3(-1, 0, -1),
-    vec3(0, 1, 1),
-    vec3(0, 1, -1),
-    vec3(0, -1, 1),
-    vec3(0, -1, -1),
-    vec3(1, 1, 0),
-    vec3(-1, 1, 0),
-    vec3(1, -1, 0),
-    vec3(-1, -1, 0),
+    vec3(1, 1, 0), vec3(-1, 1, 0), vec3(1, -1, 0), vec3(-1, -1, 0),
+    vec3(1, 0, 1), vec3(-1, 0, 1), vec3(1, 0, -1), vec3(-1, 0, -1),
+    vec3(0, 1, 1), vec3(0, 1, -1), vec3(0, -1, 1), vec3(0, -1, -1),
+    vec3(1, 1, 0), vec3(-1, 1, 0), vec3(1, -1, 0), vec3(-1, -1, 0),
   };
 
 int perm[256] = int[256](
@@ -83,7 +70,7 @@ int pickGradient(int x, int y) {
 float fbm(vec2 pos) {
   float height = 0.0;
   float totalAmp = 0.0;
-  float amp = u_amplitude;
+  float amp = 1.0;
   float freq = u_frequency;
 
   for (int i = 0; i < u_noisePass; i++) {
@@ -93,8 +80,8 @@ float fbm(vec2 pos) {
     freq *= 2.0;
   }
 
-  // return (height / totalAmp) * 0.5 + 0.5;
-  return height;
+  return height / totalAmp;
+  // return height;
 }
 
 float perlin(vec2 pos) {

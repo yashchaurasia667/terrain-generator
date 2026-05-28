@@ -1,6 +1,7 @@
 #include <glad/glad.h>
-#include <GLFW/glfw3.h>
 
+#include <GLFW/glfw3.h>
+#include <glm/ext/vector_float3.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -9,6 +10,7 @@
 #include <imgui/backends/imgui_impl_opengl3.h>
 #include <imgui/imgui.h>
 
+#include <cmath>
 #include <iostream>
 #include <vector>
 
@@ -28,7 +30,8 @@ unsigned int scr_width = 1280, scr_height = 720;
 // IMGUI PARAMS
 bool wireframe = false, sanity_check = false, render_terrain = true;
 float amp = 128.0f, freq = 0.5f;
-int noisePass = 4;
+int noisePass = 10;
+glm::vec3 lightDir = glm::vec3(0.6f, 1.0f, 0.4f);
 
 // FUNCTION DECLERATIONS
 void framebufferSizeCallback(GLFWwindow *window, int width, int height);
@@ -36,9 +39,9 @@ void processInput(GLFWwindow *window);
 void cursorPosCallback(GLFWwindow *window, double xposin, double yposin);
 void mouseButtonCallback(GLFWwindow *window, int button, int action, int mods);
 void scrollCallback(GLFWwindow *window, double xoffset, double yoffset);
+void charCallback(GLFWwindow *window, unsigned int codepoint);
 void keyCallback(GLFWwindow *window, int key, int scancode, int action,
                  int mods);
-void charCallback(GLFWwindow *window, unsigned int codepoint);
 
 void runNoiseShader(ComputeShader &noiseShader, Terrain &terrain,
                     unsigned int noise_tex) {
@@ -48,7 +51,7 @@ void runNoiseShader(ComputeShader &noiseShader, Terrain &terrain,
   noiseShader.setInt("u_cellWidth", terrain.cellWidth);
   noiseShader.setInt("u_chunkWidth", terrain.chunkWidth);
   noiseShader.setInt("u_noisePass", noisePass);
-  noiseShader.setFloat("u_amplitude", amp);
+  // noiseShader.setFloat("u_amplitude", amp);
   noiseShader.setFloat("u_frequency", freq);
 
   glBindImageTexture(0, noise_tex, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
@@ -88,7 +91,6 @@ int main() {
   ImGuiIO io = ImGui::GetIO();
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
-
   ImGui_ImplGlfw_InitForOpenGL(window, false);
   ImGui_ImplOpenGL3_Init("#version 430 core");
 
@@ -110,22 +112,26 @@ int main() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    runNoiseShader(noiseShader, terrain, noise_tex);
 
     // ------------------- SANITY CHECK ------------------------- //
     Shader checkShader("../shaders/shader_vert_default.glsl",
                        "../shaders/shader_frag_default.glsl");
     float check_plane[] = {
-        -1.0f, -1.0f, -2.0f, 1.0f, -1.0f, -2.0f, 1.0f,  1.0f, -2.0f,
-        -1.0f, -1.0f, -2.0f, 1.0f, 1.0f,  -2.0f, -1.0f, 1.0f, -2.0f,
-    };
+        -1.0f, -1.0f, -2.0f, 0.0f, 0.0f, 1.0f,  -1.0f, -2.0f, 1.0f, 0.0f,
+        1.0f,  1.0f,  -2.0f, 1.0f, 1.0f, -1.0f, -1.0f, -2.0f, 0.0f, 0.0f,
+        1.0f,  1.0f,  -2.0f, 1.0f, 1.0f, -1.0f, 1.0f,  -2.0f, 0.0f, 1.0f};
     VertexArray check_vao;
     VertexBuffer check_vbo(sizeof(check_plane), check_plane, GL_STATIC_DRAW);
     VertexBufferLayout check_layout;
     check_layout.push<float>(3);
+    check_layout.push<float>(2);
     check_vao.addBuffer(check_vbo, check_layout);
     // -------------------------------------------------------- //
-    //
 
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_FRONT);
+    glFrontFace(GL_CCW);
     glPatchParameteri(GL_PATCH_VERTICES, 4);
     glClearColor(0.4, 0.4, 0.4, 0.4);
     while (!glfwWindowShouldClose(window)) {
@@ -141,6 +147,15 @@ int main() {
       ImGui::NewFrame();
       {
         {
+          ImGui::Begin("lighting");
+          if (ImGui::CollapsingHeader("light dir")) {
+            ImGui::SliderFloat("x", &lightDir.x, -1.0f, 1.0f);
+            ImGui::SliderFloat("y", &lightDir.y, -1.0f, 1.0f);
+            ImGui::SliderFloat("z", &lightDir.z, -1.0f, 1.0f);
+          }
+          ImGui::End();
+        }
+        {
           ImGui::Begin("debug");
           ImGui::Checkbox("wireframe", &wireframe);
           ImGui::Checkbox("sanity check", &sanity_check);
@@ -152,13 +167,12 @@ int main() {
           ImGui::InputInt("chunk width", &terrain.chunkWidth);
           ImGui::InputInt("cell width", &terrain.cellWidth);
           ImGui::InputInt("noise seed", &terrain.noiseSeed);
-          ImGui::SliderFloat("amplitude", &amp, 0.0f, 1000.0f);
-          ImGui::SliderFloat("frequency", &freq, 0.0f, 64.0f);
           ImGui::SliderInt("nosie pass", &noisePass, 1, 64);
+          ImGui::SliderFloat("frequency", &freq, 0.0f, 3.0f);
           if (ImGui::Button("Reinitialize terrain")) {
             terrain.generateVertices();
             terrain.uploadVertexData();
-            // runNoiseShader(noiseShader, terrain, noise_tex);
+            runNoiseShader(noiseShader, terrain, noise_tex);
           }
           ImGui::End();
         }
@@ -176,6 +190,7 @@ int main() {
             ImGui::SliderInt("max tessellation level", &terrain.tess_max_level,
                              4.0f, 128.0f);
           }
+          ImGui::SliderFloat("amplitude", &amp, 0.0f, 1000.0f);
           ImGui::End();
         }
       }
@@ -191,36 +206,39 @@ int main() {
         checkShader.setMat4("model", model);
         checkShader.setMat4("view", view);
         checkShader.setMat4("projection", projection);
+        checkShader.setInt("heightMap", 0);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, noise_tex);
 
         check_vao.bind();
         glDrawArrays(GL_TRIANGLES, 0, 6);
       }
 
       if (render_terrain) {
-
-        noiseShader.bind();
-        noiseShader.setInt("u_seed", terrain.noiseSeed);
-        noiseShader.setVec2("u_chunkOffset", glm::vec2(0.0f));
-        noiseShader.setInt("u_cellWidth", terrain.cellWidth);
-        noiseShader.setInt("u_chunkWidth", terrain.chunkWidth);
-        noiseShader.setInt("u_noisePass", noisePass);
-        noiseShader.setFloat("u_amplitude", amp);
-        noiseShader.setFloat("u_frequency", freq);
-
-        glBindImageTexture(0, noise_tex, 0, GL_FALSE, 0, GL_READ_WRITE,
-                           GL_RGBA32F);
-        noiseShader.setInt("u_heightMap", 0);
-        glDispatchCompute((terrain.chunkWidth + 15) / 16,
-                          (terrain.chunkWidth + 15) / 16, 1);
-        glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
+        // noiseShader.bind();
+        // noiseShader.setInt("u_seed", terrain.noiseSeed);
+        // noiseShader.setVec2("u_chunkOffset", glm::vec2(0.0f));
+        // noiseShader.setInt("u_cellWidth", terrain.cellWidth);
+        // noiseShader.setInt("u_chunkWidth", terrain.chunkWidth);
+        // noiseShader.setInt("u_noisePass", noisePass);
+        // noiseShader.setFloat("u_amplitude", amp);
+        // noiseShader.setFloat("u_frequency", freq);
+        //
+        // glBindImageTexture(0, noise_tex, 0, GL_FALSE, 0, GL_READ_WRITE,
+        //                    GL_RGBA32F);
+        // noiseShader.setInt("u_heightMap", 0);
+        // glDispatchCompute((terrain.chunkWidth + 15) / 16,
+        //                   (terrain.chunkWidth + 15) / 16, 1);
+        // glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, noise_tex);
 
         terrain.shader.bind();
         terrain.shader.setFloat("u_amplitude", amp);
-        terrain.shader.setVec3("u_lightDir",
-                               glm::normalize(glm::vec3(0.6f, 1.0f, 0.4f)));
+        terrain.shader.setInt("u_noisePass", noisePass);
+        terrain.shader.setVec3("u_lightDir", glm::normalize(lightDir));
         terrain.shader.setVec3("u_viewPos", camera.getPos());
         terrain.render(camera, model, projection, 0);
       }
