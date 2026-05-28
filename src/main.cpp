@@ -19,6 +19,7 @@
 #include <vertexArray.h>
 #include <vertexBuffer.h>
 #include <vertexBufferLayout.h>
+
 // GLOBAL VARIABLES
 bool camera_movement = false;
 Camera camera(glm::vec3(0.0f), 45.0f, 0.1f, 50.5f);
@@ -26,6 +27,8 @@ unsigned int scr_width = 1280, scr_height = 720;
 
 // IMGUI PARAMS
 bool wireframe = false, sanity_check = false, render_terrain = true;
+float amp = 128.0f, freq = 0.5f;
+int noisePass = 4;
 
 // FUNCTION DECLERATIONS
 void framebufferSizeCallback(GLFWwindow *window, int width, int height);
@@ -33,6 +36,9 @@ void processInput(GLFWwindow *window);
 void cursorPosCallback(GLFWwindow *window, double xposin, double yposin);
 void mouseButtonCallback(GLFWwindow *window, int button, int action, int mods);
 void scrollCallback(GLFWwindow *window, double xoffset, double yoffset);
+void keyCallback(GLFWwindow *window, int key, int scancode, int action,
+                 int mods);
+void charCallback(GLFWwindow *window, unsigned int codepoint);
 
 int main() {
   glfwInit();
@@ -55,6 +61,8 @@ int main() {
   glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
   glfwSetMouseButtonCallback(window, mouseButtonCallback);
   glfwSetScrollCallback(window, scrollCallback);
+  glfwSetKeyCallback(window, keyCallback);
+  glfwSetCharCallback(window, charCallback);
   glEnable(GL_DEPTH_TEST);
 
   IMGUI_CHECKVERSION();
@@ -128,29 +136,26 @@ int main() {
           if (ImGui::Button("Reinitialize terrain")) {
             terrain.generateVertices();
             terrain.uploadVertexData();
-            // vertices = generateVertices(terrain.chunkWidth, terrain.rez);
-            // vao.bind();
-            // vbo.bind();
-            // vbo.setData(vertices.size() * sizeof(float), &vertices[0],
-            //             GL_STATIC_DRAW);
           }
           ImGui::End();
         }
         {
-          ImGui::Begin("Tessellation");
+          ImGui::Begin("terrain");
           if (ImGui::CollapsingHeader("TESS DISTANCE")) {
             ImGui::SliderFloat("min tessellation distance",
                                &terrain.tess_min_dist, 0.0f, 100.0f);
             ImGui::SliderFloat("max tessellation distance",
                                &terrain.tess_max_dist, 1.0f, 10000.0f);
           }
-
           if (ImGui::CollapsingHeader("TESS LEVEL")) {
             ImGui::SliderInt("min tessellation level", &terrain.tess_min_level,
                              0.0f, 64.0f);
             ImGui::SliderInt("max tessellation level", &terrain.tess_max_level,
                              4.0f, 128.0f);
           }
+          ImGui::SliderFloat("amplitude", &amp, 0.0f, 1000.0f);
+          ImGui::SliderFloat("frequency", &freq, 0.0f, 64.0f);
+          ImGui::SliderInt("nosie pass", &noisePass, 1, 64);
           ImGui::End();
         }
       }
@@ -177,6 +182,9 @@ int main() {
         noiseShader.setVec2("u_chunkOffset", glm::vec2(0.0f));
         noiseShader.setInt("u_cellWidth", terrain.cellWidth);
         noiseShader.setInt("u_chunkWidth", terrain.chunkWidth);
+        noiseShader.setInt("u_noisePass", noisePass);
+        noiseShader.setFloat("u_amplitude", amp);
+        noiseShader.setFloat("u_frequency", freq);
 
         glBindImageTexture(0, noise_tex, 0, GL_FALSE, 0, GL_READ_WRITE,
                            GL_RGBA32F);
@@ -188,6 +196,8 @@ int main() {
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, noise_tex);
 
+        terrain.shader.bind();
+        terrain.shader.setFloat("u_amplitude", amp);
         terrain.render(camera, model, projection, 0);
       }
 
@@ -241,6 +251,17 @@ void mouseButtonCallback(GLFWwindow *window, int button, int action, int mods) {
 }
 
 void scrollCallback(GLFWwindow *window, double xoffset, double yoffset) {
+  ImGui_ImplGlfw_ScrollCallback(window, xoffset, yoffset);
   float yoff = static_cast<float>(yoffset);
   camera.updateZoom(yoff);
+}
+
+// add these function implementations
+void keyCallback(GLFWwindow *window, int key, int scancode, int action,
+                 int mods) {
+  ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
+}
+
+void charCallback(GLFWwindow *window, unsigned int codepoint) {
+  ImGui_ImplGlfw_CharCallback(window, codepoint);
 }

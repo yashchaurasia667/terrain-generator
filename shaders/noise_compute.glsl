@@ -8,13 +8,28 @@ uniform writeonly image2D u_heightMap;
 
 uniform int u_cellWidth;
 uniform int u_chunkWidth;
+uniform int u_noisePass;
+uniform float u_amplitude;
+uniform float u_frequency;
 
 vec3 directions[] = {
-    vec3(1, 1, 0), vec3(-1, 1, 0), vec3(1, -1, 0), vec3(-1, -1, 0),
-    vec3(1, 0, 1), vec3(-1, 0, 1), vec3(1, 0, -1), vec3(-1, 0, -1),
-    vec3(0, 1, 1), vec3(0, 1, -1), vec3(0, -1, 1), vec3(0, -1, -1),
-    vec3(1, 1, 0), vec3(-1, 1, 0), vec3(1, -1, 0), vec3(-1, -1, 0),
-};
+    vec3(1, 1, 0),
+    vec3(-1, 1, 0),
+    vec3(1, -1, 0),
+    vec3(-1, -1, 0),
+    vec3(1, 0, 1),
+    vec3(-1, 0, 1),
+    vec3(1, 0, -1),
+    vec3(-1, 0, -1),
+    vec3(0, 1, 1),
+    vec3(0, 1, -1),
+    vec3(0, -1, 1),
+    vec3(0, -1, -1),
+    vec3(1, 1, 0),
+    vec3(-1, 1, 0),
+    vec3(1, -1, 0),
+    vec3(-1, -1, 0),
+  };
 
 int perm[256] = int[256](
     151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194, 233, 7, 225,
@@ -35,10 +50,11 @@ int perm[256] = int[256](
     222, 114, 67, 29, 24, 72, 243, 141, 128, 195, 78, 66, 215, 61, 156, 180
   );
 
-float perlin(vec2 pos);
-float cerp(float v0, float v1, float t);
 float lerp(float v0, float v1, float t);
+float cerp(float v0, float v1, float t);
 int pickGradient(int x, int y);
+float perlin(vec2 pos);
+float fbm(vec2 pos);
 
 void main() {
   ivec2 texCoord = ivec2(gl_GlobalInvocationID.xy);
@@ -46,7 +62,7 @@ void main() {
     return;
 
   vec2 worldPos = u_chunkOffset + vec2(texCoord);
-  float height = perlin(worldPos);
+  float height = fbm(worldPos);
   imageStore(u_heightMap, texCoord, vec4(height, height, height, 1.0));
 }
 
@@ -62,6 +78,23 @@ int pickGradient(int x, int y) {
   int ix = (x ^ u_seed) & 255;
   int iy = (y ^ u_seed) & 255;
   return perm[(perm[ix] + iy) & 255] & 15;
+}
+
+float fbm(vec2 pos) {
+  float height = 0.0;
+  float totalAmp = 0.0;
+  float amp = u_amplitude;
+  float freq = u_frequency;
+
+  for (int i = 0; i < u_noisePass; i++) {
+    height += amp * perlin(pos * freq);
+    totalAmp += amp;
+    amp *= 0.5;
+    freq *= 2.0;
+  }
+
+  // return (height / totalAmp) * 0.5 + 0.5;
+  return height;
 }
 
 float perlin(vec2 pos) {
@@ -91,5 +124,5 @@ float perlin(vec2 pos) {
   float ix1 = cerp(n01, n11, nx);
 
   float iy = cerp(ix0, ix1, ny);
-  return (iy + 1) / 2.0;
+  return iy;
 }

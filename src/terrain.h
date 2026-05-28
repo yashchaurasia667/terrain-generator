@@ -19,6 +19,7 @@ public:
   float tess_min_dist = 10, tess_max_dist = 400;
   int tess_min_level = 4, tess_max_level = 64;
   unsigned int rez = 20;
+  Shader shader;
 
   Terrain(int chunkWidth = 1000, int cellWidth = 200, int noiseSeed = 0,
           unsigned int rez = 20);
@@ -38,5 +39,4 @@ private:
   VertexArray vao;
   VertexBuffer vbo;
   VertexBufferLayout layout;
-  Shader shader;
 };

@@ -2,12 +2,12 @@
 
 out vec4 FragColor;
 
+uniform float u_amplitude;
 // uniform sampler2D heightMap;
 // in vec2 TexCoords;
 in float Height;
 
 void main() {
-  float h = (Height + 16) / 64.0;
-  // FragColor = vec4(0.4, 0.2, 0.1, 1.0);
+  float h = Height / u_amplitude;
   FragColor = vec4(h, h, h, 1.0);
 }
