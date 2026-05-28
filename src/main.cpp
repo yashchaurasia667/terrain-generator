@@ -29,7 +29,7 @@ unsigned int scr_width = 1280, scr_height = 720;
 
 // IMGUI PARAMS
 bool wireframe = false, sanity_check = false, render_terrain = true;
-float amp = 128.0f, freq = 0.5f;
+float amp = 128.0f, freq = 0.5f, amp_decay = 0.7f;
 int noisePass = 10;
 glm::vec3 lightDir = glm::vec3(0.6f, 1.0f, 0.4f);
 
@@ -53,6 +53,7 @@ void runNoiseShader(ComputeShader &noiseShader, Terrain &terrain,
   noiseShader.setInt("u_noisePass", noisePass);
   // noiseShader.setFloat("u_amplitude", amp);
   noiseShader.setFloat("u_frequency", freq);
+  noiseShader.setFloat("u_ampDecay", amp_decay);
 
   glBindImageTexture(0, noise_tex, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
   noiseShader.setInt("u_heightMap", 0);
@@ -130,8 +131,8 @@ int main() {
     // -------------------------------------------------------- //
 
     glEnable(GL_CULL_FACE);
-    glCullFace(GL_FRONT);
-    glFrontFace(GL_CCW);
+    glCullFace(GL_BACK);
+    glFrontFace(GL_CW);
     glPatchParameteri(GL_PATCH_VERTICES, 4);
     glClearColor(0.4, 0.4, 0.4, 0.4);
     while (!glfwWindowShouldClose(window)) {
@@ -168,7 +169,8 @@ int main() {
           ImGui::InputInt("cell width", &terrain.cellWidth);
           ImGui::InputInt("noise seed", &terrain.noiseSeed);
           ImGui::SliderInt("nosie pass", &noisePass, 1, 64);
-          ImGui::SliderFloat("frequency", &freq, 0.0f, 3.0f);
+          ImGui::SliderFloat("frequency", &freq, 0.0f, 1.0f);
+          ImGui::SliderFloat("amp decay", &amp_decay, 0.0f, 1.0f);
           if (ImGui::Button("Reinitialize terrain")) {
             terrain.generateVertices();
             terrain.uploadVertexData();

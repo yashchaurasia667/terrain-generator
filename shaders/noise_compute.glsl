@@ -10,6 +10,7 @@ uniform int u_cellWidth;
 uniform int u_chunkWidth;
 uniform int u_noisePass;
 uniform float u_frequency;
+uniform float u_ampDecay;
 
 vec3 directions[] = {
     vec3(1, 1, 0), vec3(-1, 1, 0), vec3(1, -1, 0), vec3(-1, -1, 0),
@@ -76,7 +77,7 @@ float fbm(vec2 pos) {
   for (int i = 0; i < u_noisePass; i++) {
     height += amp * perlin(pos * freq);
     totalAmp += amp;
-    amp *= 0.5;
+    amp *= u_ampDecay;
     freq *= 2.0;
   }
 
