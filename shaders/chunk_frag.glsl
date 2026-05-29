@@ -4,6 +4,8 @@ out vec4 FragColor;
 uniform sampler2D u_normalMap;
 uniform float u_amplitude;
 uniform vec3 u_lightColor;
+uniform float u_chunkWidth;
+uniform float u_texScale;
 
 in VS_OUT {
   vec2 TexCoords;
@@ -15,24 +17,21 @@ in VS_OUT {
 } fs_in;
 
 void main() {
-  vec3 norm = texture(u_normalMap, fs_in.TexCoords).rgb * 2.0 - 1.0;
-  norm = normalize(norm);
+  vec2 tiledUV = fs_in.TexCoords * (u_chunkWidth / u_texScale);
+  vec3 tangentNormal = texture(u_normalMap, tiledUV).rgb;
+  tangentNormal = normalize(tangentNormal * 2.0 - 1.0);
 
-  // vec3 norm = normalize(fs_in.Normal);
   vec3 lightDir = normalize(fs_in.TangetLightDir);
   vec3 viewDir = normalize(fs_in.TangetViewPos - fs_in.TangentFragPos);
   vec3 halfDir = normalize(lightDir + viewDir);
 
-  // constant ambient
   float ambient = 0.15;
-
-  // half-lambertian diffuse: maps [-1,1] dot product to [0,1]
-  float NdotL = dot(norm, lightDir);
+  float NdotL = dot(tangentNormal, lightDir);
   float diffuse = NdotL * 0.5 + 0.5; // half-lambert
   diffuse *= diffuse; // square for more contrast
 
-  // blinn-phong specular
-  float spec = pow(max(dot(norm, halfDir), 0.0), 64.0);
+  // Use tangentNormal here as well!
+  float spec = pow(max(dot(tangentNormal, halfDir), 0.0), 64.0);
   float specular = spec * 0.3;
 
   vec3 baseColor = vec3(0.35, 0.28, 0.15);

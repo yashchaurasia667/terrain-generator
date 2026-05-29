@@ -33,7 +33,7 @@ unsigned int scr_width = 1280, scr_height = 720;
 
 // IMGUI PARAMS
 bool wireframe = false, sanity_check = false, render_terrain = true;
-float amp = 128.0f, freq = 0.2f, persistance = 0.4f, lacunarity = 2.0f;
+float amp = 128.0f, freq = 0.2f, persistance = 0.4f, lacunarity = 2.0f, texScale = 10.0f;
 int noisePass = 10;
 glm::vec3 lightDir = glm::vec3(0.6f, 1.0f, 0.4f), lightColor = glm::vec3(1.0);
 
@@ -62,8 +62,6 @@ void runNoiseShader(ComputeShader &noiseShader, Terrain &terrain,
 
   glBindImageTexture(0, noise_tex, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
   noiseShader.setInt("u_heightMap", 0);
-  // glDispatchCompute((terrain.chunkWidth + 15) / 16,
-  //                   (terrain.chunkWidth + 15) / 16, 1);
   glDispatchCompute((texResolution + 15) / 16, (texResolution + 15) / 16, 1);
 
   glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
@@ -114,7 +112,7 @@ int main() {
     Texture normalMap(
         "../resources/normalMaps/rock_face/rock_face_nor_gl_2k.png");
 
-    unsigned int noise_tex;
+    unsigned int noise_tex = 0;
     glGenTextures(1, &noise_tex);
     glBindTexture(GL_TEXTURE_2D, noise_tex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, texResolution, texResolution, 0,
@@ -210,6 +208,7 @@ int main() {
                              4.0f, 128.0f);
           }
           ImGui::SliderFloat("amplitude", &amp, 0.0f, 1000.0f);
+          ImGui::SliderFloat("tex scale", &texScale, 0.0f, 100.0f);
           ImGui::End();
         }
       }
@@ -240,6 +239,8 @@ int main() {
 
         terrain.shader.bind();
         terrain.shader.setFloat("u_amplitude", amp);
+        terrain.shader.setFloat("u_chunkWidth", terrain.chunkWidth);
+        terrain.shader.setFloat("u_texScale", texScale);
         terrain.shader.setInt("u_noisePass", noisePass);
         terrain.shader.setVec3("u_lightDir", glm::normalize(lightDir));
         terrain.shader.setVec3("u_lightColor", glm::normalize(lightColor));
@@ -248,7 +249,6 @@ int main() {
 
         glActiveTexture(GL_TEXTURE1);
         normalMap.bind();
-
         terrain.render(camera, model, projection, 0);
 
         skybox.render(view, projection);
