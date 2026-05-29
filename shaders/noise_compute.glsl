@@ -10,7 +10,9 @@ uniform int u_cellWidth;
 uniform int u_chunkWidth;
 uniform int u_noisePass;
 uniform float u_frequency;
-uniform float u_ampDecay;
+
+uniform float u_lacunarity;
+uniform float u_persistance;
 
 vec3 directions[] = {
     vec3(1, 1, 0), vec3(-1, 1, 0), vec3(1, -1, 0), vec3(-1, -1, 0),
@@ -46,8 +48,8 @@ float fbm(vec2 pos);
 
 void main() {
   ivec2 texCoord = ivec2(gl_GlobalInvocationID.xy);
-  if (texCoord.x >= u_chunkWidth || texCoord.y >= u_chunkWidth)
-    return;
+  // if (texCoord.x >= u_chunkWidth || texCoord.y >= u_chunkWidth)
+  //   return;
 
   vec2 worldPos = u_chunkOffset + vec2(texCoord);
   float height = fbm(worldPos);
@@ -77,8 +79,8 @@ float fbm(vec2 pos) {
   for (int i = 0; i < u_noisePass; i++) {
     height += amp * perlin(pos * freq);
     totalAmp += amp;
-    amp *= u_ampDecay;
-    freq *= 2.0;
+    amp *= u_persistance;
+    freq *= u_lacunarity;
   }
 
   return height / totalAmp;

@@ -17,6 +17,7 @@
 #include <camera.h>
 #include <indexBuffer.h>
 #include <shader.h>
+#include <skybox.h>
 #include <terrain.h>
 #include <vertexArray.h>
 #include <vertexBuffer.h>
@@ -29,7 +30,7 @@ unsigned int scr_width = 1280, scr_height = 720;
 
 // IMGUI PARAMS
 bool wireframe = false, sanity_check = false, render_terrain = true;
-float amp = 128.0f, freq = 0.5f, amp_decay = 0.7f;
+float amp = 128.0f, freq = 0.2f, persistance = 0.4f, lacunarity = 2.0f;
 int noisePass = 10;
 glm::vec3 lightDir = glm::vec3(0.6f, 1.0f, 0.4f);
 
@@ -44,7 +45,7 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action,
                  int mods);
 
 void runNoiseShader(ComputeShader &noiseShader, Terrain &terrain,
-                    unsigned int noise_tex) {
+                    unsigned int noise_tex, int texResolution) {
   noiseShader.bind();
   noiseShader.setInt("u_seed", terrain.noiseSeed);
   noiseShader.setVec2("u_chunkOffset", glm::vec2(0.0f));
@@ -53,12 +54,15 @@ void runNoiseShader(ComputeShader &noiseShader, Terrain &terrain,
   noiseShader.setInt("u_noisePass", noisePass);
   // noiseShader.setFloat("u_amplitude", amp);
   noiseShader.setFloat("u_frequency", freq);
-  noiseShader.setFloat("u_ampDecay", amp_decay);
+  noiseShader.setFloat("u_lacunarity", lacunarity);
+  noiseShader.setFloat("u_persistance", persistance);
 
   glBindImageTexture(0, noise_tex, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
   noiseShader.setInt("u_heightMap", 0);
-  glDispatchCompute((terrain.chunkWidth + 15) / 16,
-                    (terrain.chunkWidth + 15) / 16, 1);
+  // glDispatchCompute((terrain.chunkWidth + 15) / 16,
+  //                   (terrain.chunkWidth + 15) / 16, 1);
+  glDispatchCompute((texResolution + 15) / 16, (texResolution + 15) / 16, 1);
+
   glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
 }
 
@@ -97,23 +101,25 @@ int main() {
 
   {
     ComputeShader noiseShader("../shaders/noise_compute.glsl");
+    Skybox skybox("../resources/skyboxes/citrus-orchard-road");
     Terrain terrain;
     terrain.initShader("../shaders/chunk_vert.glsl",
                        "../shaders/chunk_frag.glsl", nullptr,
                        "../shaders/tessellation_control.glsl",
                        "../shaders/tessellation_evaluation.glsl");
+    int texResolution = terrain.chunkWidth * 4;
 
     unsigned int noise_tex;
     glGenTextures(1, &noise_tex);
     glBindTexture(GL_TEXTURE_2D, noise_tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, terrain.chunkWidth,
-                 terrain.chunkWidth, 0, GL_RGBA, GL_FLOAT, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, texResolution, texResolution, 0,
+                 GL_RGBA, GL_FLOAT, nullptr);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    runNoiseShader(noiseShader, terrain, noise_tex);
+    runNoiseShader(noiseShader, terrain, noise_tex, texResolution);
 
     // ------------------- SANITY CHECK ------------------------- //
     Shader checkShader("../shaders/shader_vert_default.glsl",
@@ -170,11 +176,12 @@ int main() {
           ImGui::InputInt("noise seed", &terrain.noiseSeed);
           ImGui::SliderInt("nosie pass", &noisePass, 1, 64);
           ImGui::SliderFloat("frequency", &freq, 0.0f, 1.0f);
-          ImGui::SliderFloat("amp decay", &amp_decay, 0.0f, 1.0f);
+          ImGui::SliderFloat("lacunarity", &lacunarity, 0.0f, 5.0f);
+          ImGui::SliderFloat("persistance", &persistance, 0.0f, 1.0f);
           if (ImGui::Button("Reinitialize terrain")) {
             terrain.generateVertices();
             terrain.uploadVertexData();
-            runNoiseShader(noiseShader, terrain, noise_tex);
+            runNoiseShader(noiseShader, terrain, noise_tex, texResolution);
           }
           ImGui::End();
         }
@@ -218,22 +225,6 @@ int main() {
       }
 
       if (render_terrain) {
-        // noiseShader.bind();
-        // noiseShader.setInt("u_seed", terrain.noiseSeed);
-        // noiseShader.setVec2("u_chunkOffset", glm::vec2(0.0f));
-        // noiseShader.setInt("u_cellWidth", terrain.cellWidth);
-        // noiseShader.setInt("u_chunkWidth", terrain.chunkWidth);
-        // noiseShader.setInt("u_noisePass", noisePass);
-        // noiseShader.setFloat("u_amplitude", amp);
-        // noiseShader.setFloat("u_frequency", freq);
-        //
-        // glBindImageTexture(0, noise_tex, 0, GL_FALSE, 0, GL_READ_WRITE,
-        //                    GL_RGBA32F);
-        // noiseShader.setInt("u_heightMap", 0);
-        // glDispatchCompute((terrain.chunkWidth + 15) / 16,
-        //                   (terrain.chunkWidth + 15) / 16, 1);
-        // glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
-
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, noise_tex);
 
@@ -243,6 +234,8 @@ int main() {
         terrain.shader.setVec3("u_lightDir", glm::normalize(lightDir));
         terrain.shader.setVec3("u_viewPos", camera.getPos());
         terrain.render(camera, model, projection, 0);
+
+        skybox.render(view, projection);
       }
 
       ImGui::Render();
