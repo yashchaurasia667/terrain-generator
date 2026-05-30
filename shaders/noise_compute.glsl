@@ -22,8 +22,7 @@ vec3 directions[] = {
     vec3(1, 1, 0), vec3(-1, 1, 0), vec3(1, -1, 0), vec3(-1, -1, 0),
   };
 int perm[256] = int[256](
-    151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194, 233, 7, 225,
-    140, 36, 103, 30, 69, 142, 8, 99, 37, 240, 21, 10, 23, 190, 6, 148,
+    151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194, 233, 7, 225, 140, 36, 103, 30, 69, 142, 8, 99, 37, 240, 21, 10, 23, 190, 6, 148,
     247, 120, 234, 75, 0, 26, 197, 62, 94, 252, 219, 203, 117, 35, 11, 32,
     57, 177, 33, 88, 237, 149, 56, 87, 174, 20, 125, 136, 171, 168, 68, 175,
     74, 165, 71, 134, 139, 48, 27, 166, 77, 146, 158, 231, 83, 111, 229, 122,
@@ -44,7 +43,7 @@ float lerp(float v0, float v1, float t);
 float cerp(float v0, float v1, float t);
 int pickGradient(int x, int y);
 vec3 perlinD(vec2 pos);
-float fbm(vec2 pos);
+vec3 fbm(vec2 pos);
 
 void main() {
   ivec2 texCoord = ivec2(gl_GlobalInvocationID.xy);
@@ -52,8 +51,8 @@ void main() {
   //   return;
 
   vec2 worldPos = u_chunkOffset + vec2(texCoord);
-  float height = fbm(worldPos);
-  imageStore(u_heightMap, texCoord, vec4(height, height, height, 1.0));
+  vec3 val = fbm(worldPos);
+  imageStore(u_heightMap, texCoord, vec4(val, 1.0));
 }
 
 float lerp(float v0, float v1, float t) {
@@ -70,7 +69,7 @@ int pickGradient(int x, int y) {
   return perm[(perm[ix] + iy) & 255] & 15;
 }
 
-float fbm(vec2 pos) {
+vec3 fbm(vec2 pos) {
   float height = 0.0;
   float totalAmp = 0.0;
   float amp = 1.0;
@@ -92,7 +91,7 @@ float fbm(vec2 pos) {
     amp *= u_persistance;
     freq *= u_lacunarity;
   }
-  return height / totalAmp;
+  return vec3(height / totalAmp, gradient);
 }
 
 vec3 perlinD(vec2 pos) {
@@ -115,15 +114,11 @@ vec3 perlinD(vec2 pos) {
 
   // smoothstep weights and their derivatives
   // cubic function 3t^2 - 2t^3
-  // float wu = 3.0 * nx * nx - 2.0 * nx * nx * nx;
-  // float wv = 3.0 * ny * ny - 2.0 * ny * ny * ny;
-  float wu = 6.0 * nx * nx * nx * nx * nx - 5.0 * nx * nx * nx * nx + 10 * nx * nx * nx;
-  float wv = 6.0 * ny * ny * ny * ny * ny - 5.0 * ny * ny * ny * ny + 10 * ny * ny * ny;
+  float wu = 3.0 * nx * nx - 2.0 * nx * nx * nx;
+  float wv = 3.0 * ny * ny - 2.0 * ny * ny * ny;
 
-  // float su = 6.0 * nx * (1.0 - nx); // d(wu)/d(nx)
-  // float sv = 6.0 * ny * (1.0 - ny); // d(wv)/d(ny)
-  float su = 30.0 * nx * nx * nx * nx - 20.0 * nx * nx * nx + 30 * nx * nx;
-  float sv = 30.0 * nx * nx * nx * nx - 20.0 * nx * nx * nx + 30 * nx * nx;
+  float su = 6.0 * nx * (1.0 - nx); // d(wu)/d(nx)
+  float sv = 6.0 * ny * (1.0 - ny); // d(wv)/d(ny)
 
   // bilinear rows
   float A = n00 * (1.0 - wu) + n10 * wu;

@@ -1,11 +1,13 @@
 #version 430 core
 out vec4 FragColor;
 
+uniform sampler2D heightMap;
 uniform sampler2D u_normalMap;
 uniform float u_amplitude;
 uniform vec3 u_lightColor;
 uniform float u_chunkWidth;
 uniform vec3 u_terrainColor;
+uniform vec3 u_snowColor;
 uniform float u_texScale;
 
 in VS_OUT {
@@ -35,8 +37,12 @@ void main() {
   float spec = pow(max(dot(tangentNormal, halfDir), 0.0), 64.0);
   float specular = spec * 0.3;
 
-  // vec3 baseColor = vec3(0.35, 0.28, 0.15);
+  vec2 gradient = normalize(texture(heightMap, fs_in.TexCoords).gb);
+  vec3 color = mix(u_snowColor, u_terrainColor, dot(gradient.x, gradient.y));
+  if (fs_in.Height < (-u_amplitude / 4.0)) {
+    color = u_terrainColor;
+  }
 
-  vec3 result = u_terrainColor * (ambient + diffuse * u_lightColor) + u_lightColor * specular;
+  vec3 result = color * (ambient + diffuse * u_lightColor) + u_lightColor * specular;
   FragColor = vec4(result, 1.0);
 }

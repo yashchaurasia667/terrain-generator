@@ -37,7 +37,8 @@ float amp = 128.0f, freq = 0.29f, persistance = 0.43f, lacunarity = 2.7f,
       texScale = 15.5f, slopeStrength = 1.2f;
 int noisePass = 10;
 glm::vec3 lightDir = glm::vec3(0.6f, 1.0f, 0.4f), lightColor = glm::vec3(1.0),
-          terrainColor = glm::vec3(0.35, 0.28, 0.15);
+          terrainColor = glm::vec3(0.35, 0.28, 0.15),
+          snowColor = glm::vec3(1.0);
 
 // FUNCTION DECLERATIONS
 void framebufferSizeCallback(GLFWwindow *window, int width, int height);
@@ -173,9 +174,14 @@ int main() {
             ImGui::SliderFloat("b", &lightColor.z, 0.0f, 1.0f);
           }
           if (ImGui::CollapsingHeader("terrain color")) {
-            ImGui::SliderFloat("r", &terrainColor.x, 0.0f, 1.0f);
-            ImGui::SliderFloat("g", &terrainColor.y, 0.0f, 1.0f);
-            ImGui::SliderFloat("b", &terrainColor.z, 0.0f, 1.0f);
+            ImGui::SliderFloat("tr", &terrainColor.x, 0.0f, 1.0f);
+            ImGui::SliderFloat("tg", &terrainColor.y, 0.0f, 1.0f);
+            ImGui::SliderFloat("tb", &terrainColor.z, 0.0f, 1.0f);
+          }
+          if (ImGui::CollapsingHeader("snow color")) {
+            ImGui::SliderFloat("sr", &snowColor.x, 0.0f, 1.0f);
+            ImGui::SliderFloat("sg", &snowColor.y, 0.0f, 1.0f);
+            ImGui::SliderFloat("sb", &snowColor.z, 0.0f, 1.0f);
           }
           ImGui::End();
         }
@@ -257,6 +263,7 @@ int main() {
         terrain.shader.setVec3("u_viewPos", camera.getPos());
         terrain.shader.setInt("u_normalMap", 1);
         terrain.shader.setVec3("u_terrainColor", terrainColor);
+        terrain.shader.setVec3("u_snowColor", snowColor);
 
         glActiveTexture(GL_TEXTURE1);
         normalMap.bind();
