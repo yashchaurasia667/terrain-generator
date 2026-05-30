@@ -7,8 +7,11 @@ uniform float u_amplitude;
 uniform vec3 u_lightColor;
 uniform float u_chunkWidth;
 uniform vec3 u_terrainColor;
-uniform vec3 u_snowColor;
 uniform float u_texScale;
+
+uniform vec3 u_snowColor;
+uniform float u_snowSlopeMax;
+uniform float u_snowSlopeMin;
 
 in VS_OUT {
   vec2 TexCoords;
@@ -37,11 +40,19 @@ void main() {
   float spec = pow(max(dot(tangentNormal, halfDir), 0.0), 64.0);
   float specular = spec * 0.3;
 
-  vec2 gradient = normalize(texture(heightMap, fs_in.TexCoords).gb);
-  vec3 color = mix(u_snowColor, u_terrainColor, dot(gradient.x, gradient.y));
-  if (fs_in.Height < (-u_amplitude / 4.0)) {
-    color = u_terrainColor;
-  }
+  vec2 gradient = texture(heightMap, fs_in.TexCoords).gb;
+  float steepness = length(gradient);
+  float snowSlope = smoothstep(u_snowSlopeMax, u_snowSlopeMin, steepness);
+
+  float heightThreashold = -u_amplitude * 0.2;
+  float heightFade = smoothstep(
+      heightThreashold - u_amplitude * 0.15,
+      heightThreashold + u_amplitude * 0.15,
+      fs_in.Height
+    );
+
+  float snowAmount = snowSlope * heightFade;
+  vec3 color = mix(u_terrainColor, u_snowColor, snowAmount);
 
   vec3 result = color * (ambient + diffuse * u_lightColor) + u_lightColor * specular;
   FragColor = vec4(result, 1.0);

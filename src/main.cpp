@@ -34,7 +34,7 @@ unsigned int scr_width = 1280, scr_height = 720;
 // IMGUI PARAMS
 bool wireframe = false, sanity_check = false, render_terrain = true;
 float amp = 128.0f, freq = 0.29f, persistance = 0.43f, lacunarity = 2.7f,
-      texScale = 15.5f, slopeStrength = 1.2f;
+      texScale = 15.5f, slopeStrength = 1.2f, snowSlopeMax = 0.3f, snowSlopeMin = 1.2f;
 int noisePass = 10;
 glm::vec3 lightDir = glm::vec3(0.6f, 1.0f, 0.4f), lightColor = glm::vec3(1.0),
           terrainColor = glm::vec3(0.35, 0.28, 0.15),
@@ -77,9 +77,7 @@ int main() {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-  GLFWwindow *window =
-      glfwCreateWindow(scr_width, scr_height, "Terrain Generator", NULL, NULL);
-  if (window == nullptr) {
+  GLFWwindow *window = glfwCreateWindow(scr_width, scr_height, "Terrain Generator", NULL, NULL); if (window == nullptr) {
     std::cout << "Failed to create a GLFW window" << std::endl;
     glfwTerminate();
     return -1;
@@ -224,6 +222,8 @@ int main() {
                              4.0f, 128.0f);
           }
           ImGui::SliderFloat("amplitude", &amp, 0.0f, 1000.0f);
+          ImGui::SliderFloat("snow slope max", &snowSlopeMax, 0.0f, 1.0f);
+          ImGui::SliderFloat("snow slope min", &snowSlopeMin, 0.0f, 10.0f);
           ImGui::SliderFloat("tex scale", &texScale, 0.0f, 100.0f);
           ImGui::End();
         }
@@ -264,6 +264,8 @@ int main() {
         terrain.shader.setInt("u_normalMap", 1);
         terrain.shader.setVec3("u_terrainColor", terrainColor);
         terrain.shader.setVec3("u_snowColor", snowColor);
+        terrain.shader.setFloat("u_snowSlopeMax", snowSlopeMax);
+        terrain.shader.setFloat("u_snowSlopeMin", snowSlopeMin);
 
         glActiveTexture(GL_TEXTURE1);
         normalMap.bind();
