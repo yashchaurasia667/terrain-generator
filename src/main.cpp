@@ -33,9 +33,11 @@ unsigned int scr_width = 1280, scr_height = 720;
 
 // IMGUI PARAMS
 bool wireframe = false, sanity_check = false, render_terrain = true;
-float amp = 128.0f, freq = 0.2f, persistance = 0.4f, lacunarity = 2.0f, texScale = 10.0f;
+float amp = 128.0f, freq = 0.29f, persistance = 0.43f, lacunarity = 2.7f,
+      texScale = 15.5f, slopeStrength = 1.2f;
 int noisePass = 10;
-glm::vec3 lightDir = glm::vec3(0.6f, 1.0f, 0.4f), lightColor = glm::vec3(1.0);
+glm::vec3 lightDir = glm::vec3(0.6f, 1.0f, 0.4f), lightColor = glm::vec3(1.0),
+          terrainColor = glm::vec3(0.35, 0.28, 0.15);
 
 // FUNCTION DECLERATIONS
 void framebufferSizeCallback(GLFWwindow *window, int width, int height);
@@ -57,6 +59,7 @@ void runNoiseShader(ComputeShader &noiseShader, Terrain &terrain,
   noiseShader.setInt("u_noisePass", noisePass);
   // noiseShader.setFloat("u_amplitude", amp);
   noiseShader.setFloat("u_frequency", freq);
+  noiseShader.setFloat("u_slopeStrength", slopeStrength);
   noiseShader.setFloat("u_lacunarity", lacunarity);
   noiseShader.setFloat("u_persistance", persistance);
 
@@ -108,6 +111,7 @@ int main() {
                        "../shaders/chunk_frag.glsl", nullptr,
                        "../shaders/tessellation_control.glsl",
                        "../shaders/tessellation_evaluation.glsl");
+    terrain.noiseSeed = 5;
     int texResolution = terrain.chunkWidth * 4;
     Texture normalMap(
         "../resources/normalMaps/rock_face/rock_face_nor_gl_2k.png");
@@ -168,6 +172,11 @@ int main() {
             ImGui::SliderFloat("g", &lightColor.y, 0.0f, 1.0f);
             ImGui::SliderFloat("b", &lightColor.z, 0.0f, 1.0f);
           }
+          if (ImGui::CollapsingHeader("terrain color")) {
+            ImGui::SliderFloat("r", &terrainColor.x, 0.0f, 1.0f);
+            ImGui::SliderFloat("g", &terrainColor.y, 0.0f, 1.0f);
+            ImGui::SliderFloat("b", &terrainColor.z, 0.0f, 1.0f);
+          }
           ImGui::End();
         }
         {
@@ -186,6 +195,7 @@ int main() {
           ImGui::SliderFloat("frequency", &freq, 0.0f, 1.0f);
           ImGui::SliderFloat("lacunarity", &lacunarity, 0.0f, 5.0f);
           ImGui::SliderFloat("persistance", &persistance, 0.0f, 1.0f);
+          ImGui::SliderFloat("slope strength", &slopeStrength, 0.0f, 10.0f);
           if (ImGui::Button("Reinitialize terrain")) {
             terrain.generateVertices();
             terrain.uploadVertexData();
@@ -246,6 +256,7 @@ int main() {
         terrain.shader.setVec3("u_lightColor", glm::normalize(lightColor));
         terrain.shader.setVec3("u_viewPos", camera.getPos());
         terrain.shader.setInt("u_normalMap", 1);
+        terrain.shader.setVec3("u_terrainColor", terrainColor);
 
         glActiveTexture(GL_TEXTURE1);
         normalMap.bind();

@@ -10,6 +10,7 @@ uniform int u_cellWidth;
 uniform int u_chunkWidth;
 uniform int u_noisePass;
 uniform float u_frequency;
+uniform float u_slopeStrength;
 
 uniform float u_lacunarity;
 uniform float u_persistance;
@@ -20,7 +21,6 @@ vec3 directions[] = {
     vec3(0, 1, 1), vec3(0, 1, -1), vec3(0, -1, 1), vec3(0, -1, -1),
     vec3(1, 1, 0), vec3(-1, 1, 0), vec3(1, -1, 0), vec3(-1, -1, 0),
   };
-
 int perm[256] = int[256](
     151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194, 233, 7, 225,
     140, 36, 103, 30, 69, 142, 8, 99, 37, 240, 21, 10, 23, 190, 6, 148,
@@ -43,7 +43,7 @@ int perm[256] = int[256](
 float lerp(float v0, float v1, float t);
 float cerp(float v0, float v1, float t);
 int pickGradient(int x, int y);
-float perlin(vec2 pos);
+vec3 perlinD(vec2 pos);
 float fbm(vec2 pos);
 
 void main() {
@@ -75,21 +75,28 @@ float fbm(vec2 pos) {
   float totalAmp = 0.0;
   float amp = 1.0;
   float freq = u_frequency;
+  vec2 gradient = vec2(0.0);
 
   for (int i = 0; i < u_noisePass; i++) {
-    height += amp * perlin(pos * freq);
+    vec3 nd = perlinD(pos * freq);
+    // steeper accumulated gradient → less contribution from this octave
+    float weight = 1.0 / (1.0 + dot(gradient, gradient) * u_slopeStrength);
+
+    height += amp * nd.x * weight;
     totalAmp += amp;
+
+    // accumulate gradient in world space
+    // nd.yz is gradient in (pos*freq) space, multiply by freq to get world space
+    gradient += amp * nd.yz;
+
     amp *= u_persistance;
     freq *= u_lacunarity;
   }
-
   return height / totalAmp;
-  // return height;
 }
 
-float perlin(vec2 pos) {
-  // borders
-  ivec2 p0 = ivec2(floor(pos / u_cellWidth) * u_cellWidth);
+vec3 perlinD(vec2 pos) {
+  ivec2 p0 = ivec2(floor(pos / float(u_cellWidth)) * float(u_cellWidth));
   ivec2 p1 = p0 + u_cellWidth;
 
   vec3 d00 = directions[pickGradient(p0.x, p0.y)];
@@ -97,22 +104,43 @@ float perlin(vec2 pos) {
   vec3 d10 = directions[pickGradient(p1.x, p0.y)];
   vec3 d11 = directions[pickGradient(p1.x, p1.y)];
 
-  float nx = (pos.x - p0.x) / u_cellWidth;
-  float ny = (pos.y - p0.y) / u_cellWidth;
+  float nx = (pos.x - float(p0.x)) / float(u_cellWidth);
+  float ny = (pos.y - float(p0.y)) / float(u_cellWidth);
 
-  vec3 p00 = vec3(nx, ny, 0.0);
-  vec3 p10 = vec3(nx - 1.0, ny, 0.0);
-  vec3 p01 = vec3(nx, ny - 1.0, 0.0);
-  vec3 p11 = vec3(nx - 1.0, ny - 1.0, 0.0);
+  // corner dot products
+  float n00 = dot(d00.xy, vec2(nx, ny));
+  float n10 = dot(d10.xy, vec2(nx - 1.0, ny));
+  float n01 = dot(d01.xy, vec2(nx, ny - 1.0));
+  float n11 = dot(d11.xy, vec2(nx - 1.0, ny - 1.0));
 
-  float n00 = dot(d00, p00);
-  float n01 = dot(d01, p01);
-  float n10 = dot(d10, p10);
-  float n11 = dot(d11, p11);
+  // smoothstep weights and their derivatives
+  // cubic function 3t^2 - 2t^3
+  // float wu = 3.0 * nx * nx - 2.0 * nx * nx * nx;
+  // float wv = 3.0 * ny * ny - 2.0 * ny * ny * ny;
+  float wu = 6.0 * nx * nx * nx * nx * nx - 5.0 * nx * nx * nx * nx + 10 * nx * nx * nx;
+  float wv = 6.0 * ny * ny * ny * ny * ny - 5.0 * ny * ny * ny * ny + 10 * ny * ny * ny;
 
-  float ix0 = cerp(n00, n10, nx);
-  float ix1 = cerp(n01, n11, nx);
+  // float su = 6.0 * nx * (1.0 - nx); // d(wu)/d(nx)
+  // float sv = 6.0 * ny * (1.0 - ny); // d(wv)/d(ny)
+  float su = 30.0 * nx * nx * nx * nx - 20.0 * nx * nx * nx + 30 * nx * nx;
+  float sv = 30.0 * nx * nx * nx * nx - 20.0 * nx * nx * nx + 30 * nx * nx;
 
-  float iy = cerp(ix0, ix1, ny);
-  return iy;
+  // bilinear rows
+  float A = n00 * (1.0 - wu) + n10 * wu;
+  float B = n01 * (1.0 - wu) + n11 * wu;
+  float value = A * (1.0 - wv) + B * wv;
+
+  // analytical gradient in cell-normalized space
+  float dA_dnx = d00.x * (1.0 - wu) + d10.x * wu + (n10 - n00) * su;
+  float dB_dnx = d01.x * (1.0 - wu) + d11.x * wu + (n11 - n01) * su;
+
+  float dA_dny = d00.y * (1.0 - wu) + d10.y * wu;
+  float dB_dny = d01.y * (1.0 - wu) + d11.y * wu;
+
+  // convert from cell-normalized space to world space
+  float invCW = 1.0 / float(u_cellWidth);
+  float df_dx = dA_dnx * (1.0 - wv) + dB_dnx * wv;
+  float df_dy = dA_dny * (1.0 - wv) + dB_dny * wv + (B - A) * sv;
+
+  return vec3(value, df_dx, df_dy);
 }
