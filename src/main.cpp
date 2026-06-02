@@ -33,12 +33,6 @@ unsigned int scr_width = 1280, scr_height = 720;
 
 // IMGUI PARAMS
 bool wireframe = false, sanity_check = false, render_terrain = true;
-float amp = 128.0f, freq = 0.29f, persistance = 0.43f, lacunarity = 2.7f,
-      texScale = 15.5f, slopeStrength = 1.2f, snowSlopeMax = 0.3f, snowSlopeMin = 1.2f;
-int noisePass = 10;
-glm::vec3 lightDir = glm::vec3(0.6f, 1.0f, 0.4f), lightColor = glm::vec3(1.0),
-          terrainColor = glm::vec3(0.35, 0.28, 0.15),
-          snowColor = glm::vec3(1.0);
 
 // FUNCTION DECLERATIONS
 void framebufferSizeCallback(GLFWwindow *window, int width, int height);
@@ -50,34 +44,15 @@ void charCallback(GLFWwindow *window, unsigned int codepoint);
 void keyCallback(GLFWwindow *window, int key, int scancode, int action,
                  int mods);
 
-void runNoiseShader(ComputeShader &noiseShader, Terrain &terrain,
-                    unsigned int noise_tex, int texResolution) {
-  noiseShader.bind();
-  noiseShader.setInt("u_seed", terrain.noiseSeed);
-  noiseShader.setVec2("u_chunkOffset", glm::vec2(0.0f));
-  noiseShader.setInt("u_cellWidth", terrain.cellWidth);
-  noiseShader.setInt("u_chunkWidth", terrain.chunkWidth);
-  noiseShader.setInt("u_noisePass", noisePass);
-  // noiseShader.setFloat("u_amplitude", amp);
-  noiseShader.setFloat("u_frequency", freq);
-  noiseShader.setFloat("u_slopeStrength", slopeStrength);
-  noiseShader.setFloat("u_lacunarity", lacunarity);
-  noiseShader.setFloat("u_persistance", persistance);
-
-  glBindImageTexture(0, noise_tex, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
-  noiseShader.setInt("u_heightMap", 0);
-  glDispatchCompute((texResolution + 15) / 16, (texResolution + 15) / 16, 1);
-
-  glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
-}
-
 int main() {
   glfwInit();
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-  GLFWwindow *window = glfwCreateWindow(scr_width, scr_height, "Terrain Generator", NULL, NULL); if (window == nullptr) {
+  GLFWwindow *window =
+      glfwCreateWindow(scr_width, scr_height, "Terrain Generator", NULL, NULL);
+  if (window == nullptr) {
     std::cout << "Failed to create a GLFW window" << std::endl;
     glfwTerminate();
     return -1;
@@ -103,29 +78,17 @@ int main() {
   ImGui_ImplOpenGL3_Init("#version 430 core");
 
   {
-    ComputeShader noiseShader("../shaders/noise_compute.glsl");
-    Skybox skybox("../resources/skyboxes/citrus-orchard-road");
+    Skybox skybox("../resources/skyboxes/citrus-orchard-road", "hdr");
+
     Terrain terrain;
-    terrain.initShader("../shaders/chunk_vert.glsl",
+    terrain.initShader("../shaders/noise_compute.glsl", 4,
+                       "../shaders/chunk_vert.glsl",
                        "../shaders/chunk_frag.glsl", nullptr,
                        "../shaders/tessellation_control.glsl",
                        "../shaders/tessellation_evaluation.glsl");
-    terrain.noiseSeed = 5;
-    int texResolution = terrain.chunkWidth * 4;
+
     Texture normalMap(
         "../resources/normalMaps/rock_face/rock_face_nor_gl_2k.png");
-
-    unsigned int noise_tex = 0;
-    glGenTextures(1, &noise_tex);
-    glBindTexture(GL_TEXTURE_2D, noise_tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, texResolution, texResolution, 0,
-                 GL_RGBA, GL_FLOAT, nullptr);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    runNoiseShader(noiseShader, terrain, noise_tex, texResolution);
 
     // ------------------- SANITY CHECK ------------------------- //
     Shader checkShader("../shaders/shader_vert_default.glsl",
@@ -162,24 +125,29 @@ int main() {
         {
           ImGui::Begin("lighting");
           if (ImGui::CollapsingHeader("light dir")) {
-            ImGui::SliderFloat("x", &lightDir.x, -1.0f, 1.0f);
-            ImGui::SliderFloat("y", &lightDir.y, -1.0f, 1.0f);
-            ImGui::SliderFloat("z", &lightDir.z, -1.0f, 1.0f);
+            ImGui::SliderFloat("x", &terrain.lightDir.x, -1.0f, 1.0f);
+            ImGui::SliderFloat("y", &terrain.lightDir.y, -1.0f, 1.0f);
+            ImGui::SliderFloat("z", &terrain.lightDir.z, -1.0f, 1.0f);
           }
           if (ImGui::CollapsingHeader("light color")) {
-            ImGui::SliderFloat("r", &lightColor.x, 0.0f, 1.0f);
-            ImGui::SliderFloat("g", &lightColor.y, 0.0f, 1.0f);
-            ImGui::SliderFloat("b", &lightColor.z, 0.0f, 1.0f);
+            ImGui::SliderFloat("r", &terrain.lightColor.x, 0.0f, 1.0f);
+            ImGui::SliderFloat("g", &terrain.lightColor.y, 0.0f, 1.0f);
+            ImGui::SliderFloat("b", &terrain.lightColor.z, 0.0f, 1.0f);
+          }
+          if (ImGui::CollapsingHeader("ambient color")) {
+            ImGui::SliderFloat("ar", &terrain.ambient.x, 0.0f, 1.0f);
+            ImGui::SliderFloat("ag", &terrain.ambient.y, 0.0f, 1.0f);
+            ImGui::SliderFloat("ab", &terrain.ambient.z, 0.0f, 1.0f);
           }
           if (ImGui::CollapsingHeader("terrain color")) {
-            ImGui::SliderFloat("tr", &terrainColor.x, 0.0f, 1.0f);
-            ImGui::SliderFloat("tg", &terrainColor.y, 0.0f, 1.0f);
-            ImGui::SliderFloat("tb", &terrainColor.z, 0.0f, 1.0f);
+            ImGui::SliderFloat("tr", &terrain.terrainColor.x, 0.0f, 1.0f);
+            ImGui::SliderFloat("tg", &terrain.terrainColor.y, 0.0f, 1.0f);
+            ImGui::SliderFloat("tb", &terrain.terrainColor.z, 0.0f, 1.0f);
           }
           if (ImGui::CollapsingHeader("snow color")) {
-            ImGui::SliderFloat("sr", &snowColor.x, 0.0f, 1.0f);
-            ImGui::SliderFloat("sg", &snowColor.y, 0.0f, 1.0f);
-            ImGui::SliderFloat("sb", &snowColor.z, 0.0f, 1.0f);
+            ImGui::SliderFloat("sr", &terrain.snowColor.x, 0.0f, 1.0f);
+            ImGui::SliderFloat("sg", &terrain.snowColor.y, 0.0f, 1.0f);
+            ImGui::SliderFloat("sb", &terrain.snowColor.z, 0.0f, 1.0f);
           }
           ImGui::End();
         }
@@ -192,18 +160,19 @@ int main() {
         }
         {
           ImGui::Begin("chunk");
-          ImGui::InputInt("chunk width", &terrain.chunkWidth);
-          ImGui::InputInt("cell width", &terrain.cellWidth);
-          ImGui::InputInt("noise seed", &terrain.noiseSeed);
-          ImGui::SliderInt("nosie pass", &noisePass, 1, 64);
-          ImGui::SliderFloat("frequency", &freq, 0.0f, 1.0f);
-          ImGui::SliderFloat("lacunarity", &lacunarity, 0.0f, 5.0f);
-          ImGui::SliderFloat("persistance", &persistance, 0.0f, 1.0f);
-          ImGui::SliderFloat("slope strength", &slopeStrength, 0.0f, 10.0f);
+          // ImGui::InputInt("chunk width", &terrain.chunkWidth);
+          // ImGui::InputInt("cell width", &terrain.cellWidth);
+          // ImGui::InputInt("noise seed", &terrain.noiseSeed);
+          // ImGui::SliderInt("nosie pass", &noisePass, 1, 64);
+          ImGui::SliderFloat("frequency", &terrain.freq, 0.0f, 1.0f);
+          ImGui::SliderFloat("lacunarity", &terrain.lacunarity, 0.0f, 5.0f);
+          ImGui::SliderFloat("persistance", &terrain.persistance, 0.0f, 1.0f);
+          ImGui::SliderFloat("slope strength", &terrain.slopeStrength, 0.0f,
+                             10.0f);
           if (ImGui::Button("Reinitialize terrain")) {
             terrain.generateVertices();
             terrain.uploadVertexData();
-            runNoiseShader(noiseShader, terrain, noise_tex, texResolution);
+            // runNoiseShader(noiseShader, terrain, noise_tex, texResolution);
           }
           ImGui::End();
         }
@@ -221,10 +190,12 @@ int main() {
             ImGui::SliderInt("max tessellation level", &terrain.tess_max_level,
                              4.0f, 128.0f);
           }
-          ImGui::SliderFloat("amplitude", &amp, 0.0f, 1000.0f);
-          ImGui::SliderFloat("snow slope max", &snowSlopeMax, 0.0f, 1.0f);
-          ImGui::SliderFloat("snow slope min", &snowSlopeMin, 0.0f, 10.0f);
-          ImGui::SliderFloat("tex scale", &texScale, 0.0f, 100.0f);
+          ImGui::SliderFloat("amplitude", &terrain.amp, 0.0f, 1000.0f);
+          ImGui::SliderFloat("snow slope max", &terrain.snowSlopeMax, 0.0f,
+                             1.0f);
+          ImGui::SliderFloat("snow slope min", &terrain.snowSlopeMin, 0.0f,
+                             10.0f);
+          ImGui::SliderFloat("tex scale", &terrain.texScale, 0.0f, 100.0f);
           ImGui::End();
         }
       }
@@ -242,37 +213,19 @@ int main() {
         checkShader.setMat4("projection", projection);
         checkShader.setInt("heightMap", 0);
 
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, noise_tex);
-
         check_vao.bind();
         glDrawArrays(GL_TRIANGLES, 0, 6);
       }
 
       if (render_terrain) {
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, noise_tex);
-
-        terrain.shader.bind();
-        terrain.shader.setFloat("u_amplitude", amp);
-        terrain.shader.setFloat("u_chunkWidth", terrain.chunkWidth);
-        terrain.shader.setFloat("u_texScale", texScale);
-        terrain.shader.setInt("u_noisePass", noisePass);
-        terrain.shader.setVec3("u_lightDir", glm::normalize(lightDir));
-        terrain.shader.setVec3("u_lightColor", glm::normalize(lightColor));
-        terrain.shader.setVec3("u_viewPos", camera.getPos());
-        terrain.shader.setInt("u_normalMap", 1);
-        terrain.shader.setVec3("u_terrainColor", terrainColor);
-        terrain.shader.setVec3("u_snowColor", snowColor);
-        terrain.shader.setFloat("u_snowSlopeMax", snowSlopeMax);
-        terrain.shader.setFloat("u_snowSlopeMin", snowSlopeMin);
-
         glActiveTexture(GL_TEXTURE1);
         normalMap.bind();
-        terrain.render(camera, model, projection, 0);
+        terrain.shader.bind();
+        terrain.shader.setInt("u_normalMap", 1);
 
-        skybox.render(view, projection);
+        terrain.render(camera, model, projection);
       }
+      skybox.render(view, projection);
 
       ImGui::Render();
       ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
