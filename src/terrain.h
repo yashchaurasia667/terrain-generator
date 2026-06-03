@@ -13,7 +13,7 @@
 #include <vertexBufferLayout.h>
 
 struct Chunk {
-  glm::ivec2 offset;
+  glm::vec2 offset;
   unsigned int heightMap = 0;
   bool ready = false;
 };

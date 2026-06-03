@@ -47,6 +47,7 @@ vec3 fbm(vec2 pos);
 
 void main() {
   ivec2 texCoord = ivec2(gl_GlobalInvocationID.xy);
+  ivec2 texSize = imageSize(u_heightMap);
   // if (texCoord.x >= u_chunkWidth || texCoord.y >= u_chunkWidth)
   //   return;
 

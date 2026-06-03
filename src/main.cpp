@@ -34,7 +34,7 @@ unsigned int scr_width = 1280, scr_height = 720;
 
 // IMGUI PARAMS
 bool wireframe = false, sanity_check = false, render_terrain = true;
-int rezScale = 4;
+int rezScale = 1;
 
 // FUNCTION DECLERATIONS
 void framebufferSizeCallback(GLFWwindow *window, int width, int height);
