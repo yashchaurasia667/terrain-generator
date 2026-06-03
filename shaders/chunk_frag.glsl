@@ -4,10 +4,13 @@ out vec4 FragColor;
 uniform sampler2D heightMap;
 uniform sampler2D u_normalMap;
 uniform float u_amplitude;
-uniform vec3 u_lightColor;
+
 uniform float u_chunkWidth;
 uniform vec3 u_terrainColor;
 uniform float u_texScale;
+
+uniform vec3 u_lightColor;
+uniform vec3 u_ambientColor;
 
 uniform vec3 u_snowColor;
 uniform float u_snowSlopeMax;
@@ -31,7 +34,7 @@ void main() {
   vec3 viewDir = normalize(fs_in.TangetViewPos - fs_in.TangentFragPos);
   vec3 halfDir = normalize(lightDir + viewDir);
 
-  float ambient = 0.15;
+  vec3 ambient = 0.15 * u_ambientColor;
   float NdotL = dot(tangentNormal, lightDir);
   float diffuse = NdotL * 0.5 + 0.5; // half-lambert
   diffuse *= diffuse; // square for more contrast

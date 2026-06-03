@@ -34,7 +34,10 @@ unsigned int scr_width = 1280, scr_height = 720;
 
 // IMGUI PARAMS
 bool wireframe = false, sanity_check = false, render_terrain = true;
+<<<<<<< HEAD
 int rezScale = 4;
+=======
+>>>>>>> refs/remotes/origin/main
 
 // FUNCTION DECLERATIONS
 void framebufferSizeCallback(GLFWwindow *window, int width, int height);
@@ -80,15 +83,26 @@ int main() {
   ImGui_ImplOpenGL3_Init("#version 430 core");
 
   {
+<<<<<<< HEAD
     // ComputeShader noiseShader("../shaders/noise_compute.glsl");
     Skybox skybox("../resources/skyboxes/citrus-orchard-road", "png");
     Terrain terrain;
     terrain.initShader("../shaders/noise_compute.glsl", rezScale,
+=======
+    Skybox skybox("../resources/skyboxes/citrus-orchard-road", "hdr");
+
+    Terrain terrain;
+    terrain.initShader("../shaders/noise_compute.glsl", 4,
+>>>>>>> refs/remotes/origin/main
                        "../shaders/chunk_vert.glsl",
                        "../shaders/chunk_frag.glsl", nullptr,
                        "../shaders/tessellation_control.glsl",
                        "../shaders/tessellation_evaluation.glsl");
+<<<<<<< HEAD
     terrain.noiseSeed = 5;
+=======
+
+>>>>>>> refs/remotes/origin/main
     Texture normalMap(
         "../resources/normalMaps/rock_face/rock_face_nor_gl_2k.png");
 
@@ -135,6 +149,14 @@ int main() {
             ImGui::SliderFloat("r", &terrain.lightColor.x, 0.0f, 1.0f);
             ImGui::SliderFloat("g", &terrain.lightColor.y, 0.0f, 1.0f);
             ImGui::SliderFloat("b", &terrain.lightColor.z, 0.0f, 1.0f);
+<<<<<<< HEAD
+=======
+          }
+          if (ImGui::CollapsingHeader("ambient color")) {
+            ImGui::SliderFloat("ar", &terrain.ambient.x, 0.0f, 1.0f);
+            ImGui::SliderFloat("ag", &terrain.ambient.y, 0.0f, 1.0f);
+            ImGui::SliderFloat("ab", &terrain.ambient.z, 0.0f, 1.0f);
+>>>>>>> refs/remotes/origin/main
           }
           if (ImGui::CollapsingHeader("terrain color")) {
             ImGui::SliderFloat("tr", &terrain.terrainColor.x, 0.0f, 1.0f);
@@ -157,21 +179,33 @@ int main() {
         }
         {
           ImGui::Begin("chunk");
+<<<<<<< HEAD
           ImGui::InputInt("chunk width", &terrain.chunkWidth);
           ImGui::InputInt("cell width", &terrain.cellWidth);
           ImGui::InputInt("noise seed", &terrain.noiseSeed);
           ImGui::SliderInt("nosie pass", &terrain.noisePass, 1, 64);
           ImGui::SliderInt("rezScale", &rezScale, 1, 64);
 
+=======
+          // ImGui::InputInt("chunk width", &terrain.chunkWidth);
+          // ImGui::InputInt("cell width", &terrain.cellWidth);
+          // ImGui::InputInt("noise seed", &terrain.noiseSeed);
+          // ImGui::SliderInt("nosie pass", &noisePass, 1, 64);
+>>>>>>> refs/remotes/origin/main
           ImGui::SliderFloat("frequency", &terrain.freq, 0.0f, 1.0f);
           ImGui::SliderFloat("lacunarity", &terrain.lacunarity, 0.0f, 5.0f);
           ImGui::SliderFloat("persistance", &terrain.persistance, 0.0f, 1.0f);
           ImGui::SliderFloat("slope strength", &terrain.slopeStrength, 0.0f,
                              10.0f);
           if (ImGui::Button("Reinitialize terrain")) {
+<<<<<<< HEAD
             terrain.initTerrain(rezScale);
             // terrain.generateVertices();
             // terrain.uploadVertexData();
+=======
+            terrain.generateVertices();
+            terrain.uploadVertexData();
+>>>>>>> refs/remotes/origin/main
             // runNoiseShader(noiseShader, terrain, noise_tex, texResolution);
           }
           ImGui::End();
@@ -191,8 +225,15 @@ int main() {
                              4.0f, 128.0f);
           }
           ImGui::SliderFloat("amplitude", &terrain.amp, 0.0f, 1000.0f);
+<<<<<<< HEAD
           ImGui::SliderFloat("snow slope max", &terrain.snowSlopeMax, 0.0f, 1.0f);
           ImGui::SliderFloat("snow slope min", &terrain.snowSlopeMin, 0.0f, 10.0f);
+=======
+          ImGui::SliderFloat("snow slope max", &terrain.snowSlopeMax, 0.0f,
+                             1.0f);
+          ImGui::SliderFloat("snow slope min", &terrain.snowSlopeMin, 0.0f,
+                             10.0f);
+>>>>>>> refs/remotes/origin/main
           ImGui::SliderFloat("tex scale", &terrain.texScale, 0.0f, 100.0f);
           ImGui::End();
         }
@@ -211,9 +252,12 @@ int main() {
         checkShader.setMat4("projection", projection);
         checkShader.setInt("heightMap", 0);
 
+<<<<<<< HEAD
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, terrain.noise_tex);
 
+=======
+>>>>>>> refs/remotes/origin/main
         check_vao.bind();
         glDrawArrays(GL_TRIANGLES, 0, 6);
       }
@@ -221,10 +265,12 @@ int main() {
       if (render_terrain) {
         glActiveTexture(GL_TEXTURE1);
         normalMap.bind();
-        terrain.render(camera, model, projection, 0);
+        terrain.shader.bind();
+        terrain.shader.setInt("u_normalMap", 1);
 
-        skybox.render(view, projection);
+        terrain.render(camera, model, projection);
       }
+      skybox.render(view, projection);
 
       ImGui::Render();
       ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
