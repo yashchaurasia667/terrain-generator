@@ -1,15 +1,29 @@
 #include "terrain.h"
 
 Terrain::Terrain(int chunkWidth, int cellWidth, int noiseSeed,
-                 unsigned int rez) {
+                 unsigned int rez, int drawDist) {
   this->chunkWidth = chunkWidth;
   this->cellWidth = cellWidth;
   this->noiseSeed = noiseSeed;
   this->rez = rez;
+  this->drawDist = drawDist;
+
   layout.push<float>(3);
   layout.push<float>(2);
   generateVertices();
   uploadVertexData();
+
+  // draw dist -> 1 to n
+  unsigned int n = drawDist * 2 - 1;
+  for (unsigned int height = 0; height < n; height++) {
+    for (unsigned int width = 0; width < n; width++) {
+      int x = width - (int)(n / 2);
+      int y = height - (int)(n / 2);
+
+      Chunk c = {glm::ivec2(x * chunkWidth, y * chunkWidth)};
+      chunks.push_back(c);
+    }
+  }
 }
 
 Terrain::~Terrain() {}
@@ -22,16 +36,18 @@ void Terrain::initShader(const char *compute, int rezScale, const char *vert,
   shader = Shader(vert, frag, geometry, tess_control, tess_evaluation);
 
   unsigned int texResolution = rezScale * chunkWidth;
-  glGenTextures(1, &noise_tex);
-  glBindTexture(GL_TEXTURE_2D, noise_tex);
+  for (unsigned int i = 0; i < chunks.size(); i++) {
+    glGenTextures(1, &chunks[i].heightMap);
+    glBindTexture(GL_TEXTURE_2D, chunks[i].heightMap);
 
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, texResolution, texResolution, 0,
-               GL_RGBA, GL_FLOAT, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, texResolution, texResolution, 0,
+                 GL_RGBA, GL_FLOAT, nullptr);
 
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  }
   initTerrain(rezScale);
 }
 
@@ -79,14 +95,12 @@ void Terrain::generateVertices() {
       vertices.push_back((j + 1) / (float)rez);                // v
     }
   }
-  // return vertices;
 }
 
 void Terrain::initTerrain(int rezScale) {
   unsigned int texResolution = rezScale * chunkWidth;
   noiseShader.bind();
   noiseShader.setInt("u_seed", noiseSeed);
-  noiseShader.setVec2("u_chunkOffset", glm::vec2(0.0f));
   noiseShader.setInt("u_cellWidth", cellWidth);
   noiseShader.setInt("u_chunkWidth", chunkWidth);
   noiseShader.setInt("u_noisePass", noisePass);
@@ -95,44 +109,52 @@ void Terrain::initTerrain(int rezScale) {
   noiseShader.setFloat("u_slopeStrength", slopeStrength);
   noiseShader.setFloat("u_lacunarity", lacunarity);
   noiseShader.setFloat("u_persistance", persistance);
-
-  glBindImageTexture(0, noise_tex, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
   noiseShader.setInt("u_heightMap", 0);
-  glDispatchCompute((texResolution + 15) / 16, (texResolution + 15) / 16, 1);
-  glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
+
+  for (Chunk c : chunks) {
+    noiseShader.setVec2("u_chunkOffset", c.offset);
+    glBindImageTexture(0, c.heightMap, 0, GL_FALSE, 0, GL_READ_WRITE,
+                       GL_RGBA32F);
+    glDispatchCompute((texResolution + 15) / 16, (texResolution + 15) / 16, 1);
+    glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
+  }
 }
 
 void Terrain::render(Camera camera, glm::mat4 model, glm::mat4 projection) {
-  glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_2D, noise_tex);
 
+  for (Chunk c : chunks) {
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, c.heightMap);
+
+    glm::mat4 chunkModel = glm::translate(model, glm::vec3(c.offset.x, 0.0f, c.offset.y));
+    shader.setMat4("model", chunkModel);
+    shader.setMat4("view", camera.getViewMatrix());
+    shader.setMat4("projection", projection);
+
+    shader.setInt("heightMap", 0);
+    shader.setInt("MIN_TESS_LEVEL", tess_min_level);
+    shader.setInt("MAX_TESS_LEVEL", tess_max_level);
+    shader.setFloat("MIN_DISTANCE", tess_min_dist);
+    shader.setFloat("MAX_DISTANCE", tess_max_dist);
+
+    shader.setFloat("u_amplitude", amp);
+    shader.setFloat("u_chunkWidth", chunkWidth);
+    shader.setInt("u_noisePass", noisePass);
+
+    shader.setVec3("u_lightDir", glm::normalize(lightDir));
+    shader.setVec3("u_lightColor", glm::normalize(lightColor));
+    shader.setVec3("u_viewPos", camera.getPos());
+
+    shader.setFloat("u_texScale", texScale);
+    shader.setInt("u_normalMap", 1);
+    shader.setVec3("u_terrainColor", terrainColor);
+
+    shader.setVec3("u_snowColor", snowColor);
+    shader.setFloat("u_snowSlopeMax", snowSlopeMax);
+    shader.setFloat("u_snowSlopeMin", snowSlopeMin);
+
+    vao.bind();
+    glDrawArrays(GL_PATCHES, 0, rez * rez * 4);
+  }
   shader.bind();
-  shader.setMat4("model", model);
-  shader.setMat4("view", camera.getViewMatrix());
-  shader.setMat4("projection", projection);
-
-  shader.setInt("heightMap", 0);
-  shader.setInt("MIN_TESS_LEVEL", tess_min_level);
-  shader.setInt("MAX_TESS_LEVEL", tess_max_level);
-  shader.setFloat("MIN_DISTANCE", tess_min_dist);
-  shader.setFloat("MAX_DISTANCE", tess_max_dist);
-
-  shader.setFloat("u_amplitude", amp);
-  shader.setFloat("u_chunkWidth", chunkWidth);
-  shader.setInt("u_noisePass", noisePass);
-
-  shader.setVec3("u_lightDir", glm::normalize(lightDir));
-  shader.setVec3("u_lightColor", glm::normalize(lightColor));
-  shader.setVec3("u_viewPos", camera.getPos());
-
-  shader.setFloat("u_texScale", texScale);
-  shader.setInt("u_normalMap", 1);
-  shader.setVec3("u_terrainColor", terrainColor);
-
-  shader.setVec3("u_snowColor", snowColor);
-  shader.setFloat("u_snowSlopeMax", snowSlopeMax);
-  shader.setFloat("u_snowSlopeMin", snowSlopeMin);
-
-  vao.bind();
-  glDrawArrays(GL_PATCHES, 0, rez * rez * 4);
 }

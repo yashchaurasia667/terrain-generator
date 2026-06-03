@@ -12,6 +12,12 @@
 #include <vertexBuffer.h>
 #include <vertexBufferLayout.h>
 
+struct Chunk {
+  glm::ivec2 offset;
+  unsigned int heightMap = 0;
+  bool ready = false;
+};
+
 class Terrain {
 public:
   // terrain vars
@@ -37,11 +43,8 @@ public:
   ComputeShader noiseShader;
   Shader shader;
 
-  // temp
-  unsigned int noise_tex = 0;
-
   Terrain(int chunkWidth = 1000, int cellWidth = 200, int noiseSeed = 0,
-          unsigned int rez = 20);
+          unsigned int rez = 20, int drawDist = 2);
   ~Terrain();
 
   void initShader(const char *compute, int rezScale, const char *vert,
@@ -55,6 +58,8 @@ public:
 
 private:
   std::vector<float> vertices;
+  std::vector<Chunk> chunks;
+
   VertexArray vao;
   VertexBuffer vbo;
   VertexBufferLayout layout;
