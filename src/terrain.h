@@ -23,7 +23,7 @@ public:
   // terrain vars
   int chunkWidth, cellWidth, rez = 20, drawDist = 2;
   int tess_min_level = 4, tess_max_level = 64;
-  float tess_min_dist = 10, tess_max_dist = 800;
+  float tess_min_dist = 20, tess_max_dist = 2000;
   float texScale = 15.5f, slopeStrength = 1.2f, snowSlopeMax = 0.3f,
         snowSlopeMin = 1.2f;
 
@@ -33,18 +33,19 @@ public:
   float amp = 128.0f, freq = 0.29f, persistance = 0.43f, lacunarity = 2.7f;
 
   // lighting/color vars
-  glm::vec3 lightDir = glm::vec3(0.6f, 1.0f, 0.4f),
+  glm::vec3 lightDir = glm::vec3(-0.35f, 0.3f, 1.0f),
             lightColor = glm::vec3(0.47f, 0.34f, 0.26f),
             ambient = glm::vec3(0.62f, 0.59f, 1.0f),
-            terrainColor = glm::vec3(0.35, 0.28, 0.15),
-            snowColor = glm::vec3(1.0);
+            terrainColor = glm::vec3(0.35f, 0.28f, 0.15f),
+            snowColor = glm::vec3(1.0f),
+            waterColor = glm::vec3(0.2f, 0.5f, 0.7f);
 
   // shaders
   ComputeShader noiseShader;
   Shader shader;
 
   Terrain(int chunkWidth = 1000, int cellWidth = 200, int noiseSeed = 0,
-          unsigned int rez = 20, int drawDist = 2);
+          unsigned int rez = 20, int drawDist = 3);
   ~Terrain();
 
   void initShader(const char *compute, int rezScale, const char *vert,

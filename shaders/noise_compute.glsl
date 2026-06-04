@@ -9,17 +9,30 @@ uniform writeonly image2D u_heightMap;
 uniform int u_cellWidth;
 uniform int u_chunkWidth;
 uniform int u_noisePass;
+
+uniform float u_amplitude;
 uniform float u_frequency;
 uniform float u_slopeStrength;
-
 uniform float u_lacunarity;
 uniform float u_persistance;
 
 vec3 directions[] = {
-    vec3(1, 1, 0), vec3(-1, 1, 0), vec3(1, -1, 0), vec3(-1, -1, 0),
-    vec3(1, 0, 1), vec3(-1, 0, 1), vec3(1, 0, -1), vec3(-1, 0, -1),
-    vec3(0, 1, 1), vec3(0, 1, -1), vec3(0, -1, 1), vec3(0, -1, -1),
-    vec3(1, 1, 0), vec3(-1, 1, 0), vec3(1, -1, 0), vec3(-1, -1, 0),
+    vec3(1, 1, 0),
+    vec3(-1, 1, 0),
+    vec3(1, -1, 0),
+    vec3(-1, -1, 0),
+    vec3(1, 0, 1),
+    vec3(-1, 0, 1),
+    vec3(1, 0, -1),
+    vec3(-1, 0, -1),
+    vec3(0, 1, 1),
+    vec3(0, 1, -1),
+    vec3(0, -1, 1),
+    vec3(0, -1, -1),
+    vec3(1, 1, 0),
+    vec3(-1, 1, 0),
+    vec3(1, -1, 0),
+    vec3(-1, -1, 0),
   };
 int perm[256] = int[256](
     151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194, 233, 7, 225, 140, 36, 103, 30, 69, 142, 8, 99, 37, 240, 21, 10, 23, 190, 6, 148,
@@ -93,6 +106,9 @@ vec3 fbm(vec2 pos) {
     freq *= u_lacunarity;
   }
   return vec3(height / totalAmp, gradient);
+  // float worldHeight = (height / totalAmp) * u_amplitude;
+  // vec2 worldGrad = (gradient / totalAmp) * u_amplitude;
+  // return vec3(worldHeight, worldGrad);
 }
 
 vec3 perlinD(vec2 pos) {

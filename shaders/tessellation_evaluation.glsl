@@ -35,6 +35,8 @@ void main() {
 
   // sample height and apply amplitude
   tes_out.Height = texture(heightMap, tes_out.TexCoords).r * u_amplitude;
+  if(tes_out.Height < 0)
+    tes_out.Height = 0;
 
   // finite difference normal from heightmap
   vec2 texelSize = vec2(1.0) / vec2(textureSize(heightMap, 0));
@@ -43,7 +45,10 @@ void main() {
   float hD = texture(heightMap, tes_out.TexCoords - vec2(0.0, texelSize.y)).r * u_amplitude;
   float hU = texture(heightMap, tes_out.TexCoords + vec2(0.0, texelSize.y)).r * u_amplitude;
   // the 2.0 in Y controls normal smoothness — increase to flatten normals
+
   tes_out.Normal = normalize(vec3(hL - hR, 2.0, hD - hU));
+  if(tes_out.Height == 0) 
+    tes_out.Normal = vec3(0.0, 1.0, 0.0);
 
   mat3 normalMatrix = transpose(inverse(mat3(model)));
   vec3 N = normalize(normalMatrix * tes_out.Normal);

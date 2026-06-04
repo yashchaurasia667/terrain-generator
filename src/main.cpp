@@ -87,10 +87,11 @@ int main() {
                        "../shaders/chunk_frag.glsl", nullptr,
                        "../shaders/tessellation_control.glsl",
                        "../shaders/tessellation_evaluation.glsl");
-    terrain.noiseSeed = 5;
 
-    Texture normalMap(
+    Texture terrainNormal(
         "../resources/normalMaps/rock_face/rock_face_nor_gl_2k.png");
+    Texture waterNormal(
+        "../resources/normalMaps/water/water2.jpg");
 
     // ------------------- SANITY CHECK ------------------------- //
     Shader checkShader("../shaders/shader_vert_default.glsl",
@@ -150,6 +151,11 @@ int main() {
             ImGui::SliderFloat("sr", &terrain.snowColor.x, 0.0f, 1.0f);
             ImGui::SliderFloat("sg", &terrain.snowColor.y, 0.0f, 1.0f);
             ImGui::SliderFloat("sb", &terrain.snowColor.z, 0.0f, 1.0f);
+          }
+          if (ImGui::CollapsingHeader("water color")) {
+            ImGui::SliderFloat("sr", &terrain.waterColor.x, 0.0f, 1.0f);
+            ImGui::SliderFloat("sg", &terrain.waterColor.y, 0.0f, 1.0f);
+            ImGui::SliderFloat("sb", &terrain.waterColor.z, 0.0f, 1.0f);
           }
           ImGui::End();
         }
@@ -223,9 +229,13 @@ int main() {
 
       if (render_terrain) {
         glActiveTexture(GL_TEXTURE1);
-        normalMap.bind();
+        terrainNormal.bind();
+        glActiveTexture(GL_TEXTURE2);
+        waterNormal.bind();
+
         terrain.shader.bind();
-        terrain.shader.setInt("u_normalMap", 1);
+        terrain.shader.setInt("u_terrainNormal", 1);
+        terrain.shader.setInt("u_waterNormal", 2);
 
         terrain.render(camera, model, projection);
       }

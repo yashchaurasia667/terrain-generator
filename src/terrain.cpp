@@ -104,7 +104,7 @@ void Terrain::initTerrain(int rezScale) {
   noiseShader.setInt("u_cellWidth", cellWidth);
   noiseShader.setInt("u_chunkWidth", chunkWidth);
   noiseShader.setInt("u_noisePass", noisePass);
-  // noiseShader.setFloat("u_amplitude", amp);
+  noiseShader.setFloat("u_amplitude", amp);
   noiseShader.setFloat("u_frequency", freq);
   noiseShader.setFloat("u_slopeStrength", slopeStrength);
   noiseShader.setFloat("u_lacunarity", lacunarity);
@@ -148,6 +148,7 @@ void Terrain::render(Camera camera, glm::mat4 model, glm::mat4 projection) {
     shader.setFloat("u_texScale", texScale);
     shader.setInt("u_normalMap", 1);
     shader.setVec3("u_terrainColor", terrainColor);
+    shader.setVec3("u_waterColor", waterColor);
 
     shader.setVec3("u_snowColor", snowColor);
     shader.setFloat("u_snowSlopeMax", snowSlopeMax);
