@@ -143,6 +143,7 @@ void Terrain::render(Camera camera, glm::mat4 model, glm::mat4 projection) {
 
     shader.setVec3("u_lightDir", glm::normalize(lightDir));
     shader.setVec3("u_lightColor", glm::normalize(lightColor));
+    shader.setVec3("u_ambientColor", glm::normalize(ambient));
     shader.setVec3("u_viewPos", camera.getPos());
 
     shader.setFloat("u_texScale", texScale);

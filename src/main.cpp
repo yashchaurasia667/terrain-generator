@@ -90,8 +90,8 @@ int main() {
 
     Texture terrainNormal(
         "../resources/normalMaps/rock_face/rock_face_nor_gl_2k.png");
-    Texture waterNormal(
-        "../resources/normalMaps/water/water2.jpg");
+    Texture waterNormal("../resources/normalMaps/water/water2.jpg");
+    Texture waterNormal2("../resources/normalMaps/water/water3.jpg");
 
     // ------------------- SANITY CHECK ------------------------- //
     Shader checkShader("../shaders/shader_vert_default.glsl",
@@ -232,10 +232,17 @@ int main() {
         terrainNormal.bind();
         glActiveTexture(GL_TEXTURE2);
         waterNormal.bind();
+        glActiveTexture(GL_TEXTURE3);
+        waterNormal2.bind();
+        glActiveTexture(GL_TEXTURE4);
+        skybox.bindSkybox();
 
         terrain.shader.bind();
         terrain.shader.setInt("u_terrainNormal", 1);
         terrain.shader.setInt("u_waterNormal", 2);
+        terrain.shader.setInt("u_waterNormal2", 3);
+        terrain.shader.setInt("u_skybox", 4);
+        terrain.shader.setFloat("u_time", (float)glfwGetTime());
 
         terrain.render(camera, model, projection);
       }
