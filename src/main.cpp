@@ -181,8 +181,8 @@ int main() {
                              10.0f);
           if (ImGui::Button("Reinitialize terrain")) {
             terrain.initTerrain(rezScale);
-            terrain.generateVertices();
-            terrain.uploadVertexData();
+            // terrain.generateVertices();
+            // terrain.uploadVertexData();
           }
           ImGui::End();
         }

@@ -3,6 +3,7 @@
 #include <glad/glad.h>
 
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <vector>
 
@@ -21,6 +22,7 @@ struct Chunk {
 class Terrain {
 public:
   // terrain vars
+  glm::vec2 playerOffset = glm::vec2(0.0f), lastRenderOffset = glm::vec2(0.0f);
   int chunkWidth, cellWidth, rez = 20, drawDist = 2;
   int tess_min_level = 4, tess_max_level = 64;
   float tess_min_dist = 20, tess_max_dist = 2000;
@@ -52,8 +54,6 @@ public:
                   const char *frag, const char *geometry = nullptr,
                   const char *tess_control = nullptr,
                   const char *tess_evaluation = nullptr);
-  void generateVertices();
-  void uploadVertexData();
   void initTerrain(int rezScale = 1);
   void render(Camera camera, glm::mat4 model, glm::mat4 projection);
 
@@ -64,4 +64,8 @@ private:
   VertexArray vao;
   VertexBuffer vbo;
   VertexBufferLayout layout;
+
+  void generateVertices();
+  void uploadVertexData();
+  void generateChunks();
 };

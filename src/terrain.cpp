@@ -1,18 +1,8 @@
 #include "terrain.h"
+#include <iostream>
+#include <ostream>
 
-Terrain::Terrain(int chunkWidth, int cellWidth, int noiseSeed,
-                 unsigned int rez, int drawDist) {
-  this->chunkWidth = chunkWidth;
-  this->cellWidth = cellWidth;
-  this->noiseSeed = noiseSeed;
-  this->rez = rez;
-  this->drawDist = drawDist;
-
-  layout.push<float>(3);
-  layout.push<float>(2);
-  generateVertices();
-  uploadVertexData();
-
+void Terrain::generateChunks() {
   // draw dist -> 1 to n
   unsigned int n = drawDist * 2 - 1;
   for (unsigned int height = 0; height < n; height++) {
@@ -24,6 +14,21 @@ Terrain::Terrain(int chunkWidth, int cellWidth, int noiseSeed,
       chunks.push_back(c);
     }
   }
+}
+
+Terrain::Terrain(int chunkWidth, int cellWidth, int noiseSeed, unsigned int rez,
+                 int drawDist) {
+  this->chunkWidth = chunkWidth;
+  this->cellWidth = cellWidth;
+  this->noiseSeed = noiseSeed;
+  this->rez = rez;
+  this->drawDist = drawDist;
+
+  layout.push<float>(3);
+  layout.push<float>(2);
+  generateVertices();
+  uploadVertexData();
+  generateChunks();
 }
 
 Terrain::~Terrain() {}
@@ -121,12 +126,29 @@ void Terrain::initTerrain(int rezScale) {
 }
 
 void Terrain::render(Camera camera, glm::mat4 model, glm::mat4 projection) {
+  glm::vec3 pos = camera.getPos();
+  playerOffset.x = std::abs(lastRenderOffset.x - pos.x);
+  playerOffset.y = std::abs(lastRenderOffset.y - pos.z);
 
+  // std::cout << "x: " << playerOffset.x << std::endl;
+  // std::cout << "y: " << playerOffset.y << std::endl;
+
+  if (playerOffset.x > 0.5 * chunkWidth || playerOffset.y > 0.5 * chunkWidth) {
+    drawDist+=1;
+    generateChunks();
+    initTerrain(1);
+    lastRenderOffset = glm::vec2(pos.x, pos.z);
+    playerOffset = glm::vec2(0.0f);
+    std::cout << "rendering new chunks" << std::endl;
+  }
+
+  shader.bind();
   for (Chunk c : chunks) {
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, c.heightMap);
 
-    glm::mat4 chunkModel = glm::translate(model, glm::vec3(c.offset.x, 0.0f, c.offset.y));
+    glm::mat4 chunkModel =
+        glm::translate(model, glm::vec3(c.offset.x, 0.0f, c.offset.y));
     shader.setMat4("model", chunkModel);
     shader.setMat4("view", camera.getViewMatrix());
     shader.setMat4("projection", projection);
@@ -158,5 +180,4 @@ void Terrain::render(Camera camera, glm::mat4 model, glm::mat4 projection) {
     vao.bind();
     glDrawArrays(GL_PATCHES, 0, rez * rez * 4);
   }
-  shader.bind();
 }
