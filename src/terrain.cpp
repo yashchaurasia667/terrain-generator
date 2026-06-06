@@ -1,22 +1,7 @@
 #include "terrain.h"
+#include <cmath>
 #include <glm/ext/matrix_transform.hpp>
 #include <iostream>
-#include <ostream>
-
-void Terrain::generateChunks() {
-  // draw dist -> 1 to n
-  unsigned int n = drawDist * 2 - 1;
-  for (unsigned int height = 0; height < n; height++) {
-    for (unsigned int width = 0; width < n; width++) {
-      int x = width - (int)(n / 2);
-      int y = height - (int)(n / 2);
-
-      Chunk c = {glm::vec2(x * chunkWidth, y * chunkWidth),
-                 glm::vec2(0.0f, 0.0f)};
-      chunks.push_back(c);
-    }
-  }
-}
 
 Terrain::Terrain(int chunkWidth, int cellWidth, int noiseSeed, unsigned int rez,
                  int drawDist) {
@@ -33,79 +18,59 @@ Terrain::Terrain(int chunkWidth, int cellWidth, int noiseSeed, unsigned int rez,
   generateChunks();
 }
 
-Terrain::~Terrain() {}
+Terrain::~Terrain() {
+  for (Chunk &c : chunks) {
+    if (c.heightMap != 0)
+      glDeleteTextures(1, &c.heightMap);
+  }
+}
 
-void Terrain::initShader(const char *compute, int rezScale, const char *vert,
+void Terrain::generateChunks() {
+  // drawDist -> 1 to n
+  unsigned int n = drawDist * 2 - 1;
+  int half = (int)(n / 2);
+  for (int cy = -half; cy <= half; cy++) {
+    for (int cx = -half; cx <= half; cx++) {
+      Chunk c;
+      c.coord = glm::ivec2(cx, cy);
+      c.ready = false;
+      c.needsRegen = false;
+      chunks.push_back(c);
+    }
+  }
+}
+
+void Terrain::initShader(const char *compute, const char *vert,
                          const char *frag, const char *geometry,
                          const char *tess_control,
                          const char *tess_evaluation) {
   noiseShader = ComputeShader(compute);
   shader = Shader(vert, frag, geometry, tess_control, tess_evaluation);
 
-  unsigned int texResolution = rezScale * chunkWidth;
   for (unsigned int i = 0; i < chunks.size(); i++) {
     glGenTextures(1, &chunks[i].heightMap);
     glBindTexture(GL_TEXTURE_2D, chunks[i].heightMap);
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, texResolution, texResolution, 0,
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, chunkWidth, chunkWidth, 0,
                  GL_RGBA, GL_FLOAT, nullptr);
-
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   }
-  initTerrain(rezScale);
+  initTerrain();
 }
 
-void Terrain::uploadVertexData() {
-  vao.bind();
-  vbo.bind();
-  vbo.setData(vertices.size() * sizeof(float), &vertices[0], GL_STATIC_DRAW);
-  vao.addBuffer(vbo, layout);
-}
-
-void Terrain::generateVertices() {
-  // std::vector<float> vertices;
-  for (int i = 0; i < rez; i++) {
-    for (int j = 0; j < rez; j++) {
-      vertices.push_back(-chunkWidth / 2.0f +
-                         (chunkWidth * i) / (float)rez); // v.x
-      vertices.push_back(0.0f);                          // v.y
-      vertices.push_back(-chunkWidth / 2.0f +
-                         (chunkWidth * j) / (float)rez); // v.z
-      vertices.push_back(i / (float)rez);                // u
-      vertices.push_back(j / (float)rez);                // v
-
-      vertices.push_back(-chunkWidth / 2.0f +
-                         (chunkWidth * (i + 1)) / (float)rez); // v.x
-      vertices.push_back(0.0f);                                // v.y
-      vertices.push_back(-chunkWidth / 2.0f +
-                         (chunkWidth * j) / (float)rez); // v.z
-      vertices.push_back((i + 1) / (float)rez);          // u
-      vertices.push_back(j / (float)rez);                // v
-
-      vertices.push_back(-chunkWidth / 2.0f +
-                         (chunkWidth * i) / (float)rez); // v.x
-      vertices.push_back(0.0f);                          // v.y
-      vertices.push_back(-chunkWidth / 2.0f +
-                         (chunkWidth * (j + 1)) / (float)rez); // v.z
-      vertices.push_back(i / (float)rez);                      // u
-      vertices.push_back((j + 1) / (float)rez);                // v
-
-      vertices.push_back(-chunkWidth / 2.0f +
-                         (chunkWidth * (i + 1)) / (float)rez); // v.x
-      vertices.push_back(0.0f);                                // v.y
-      vertices.push_back(-chunkWidth / 2.0f +
-                         (chunkWidth * (j + 1)) / (float)rez); // v.z
-      vertices.push_back((i + 1) / (float)rez);                // u
-      vertices.push_back((j + 1) / (float)rez);                // v
-    }
+void Terrain::initTerrain() {
+  for (int i = 0; i < (int)chunks.size(); i++) {
+    generateChunkHeightmap(i);
   }
 }
 
-void Terrain::initTerrain(int rezScale) {
-  unsigned int texResolution = rezScale * chunkWidth;
+void Terrain::generateChunkHeightmap(int idx) {
+  Chunk &c = chunks[idx];
+  // world offset: chunk coord × chunk size in world units
+  glm::vec2 worldOffset = glm::vec2(c.coord) * (float)chunkWidth;
+
   noiseShader.bind();
   noiseShader.setInt("u_seed", noiseSeed);
   noiseShader.setInt("u_cellWidth", cellWidth);
@@ -117,43 +82,125 @@ void Terrain::initTerrain(int rezScale) {
   noiseShader.setFloat("u_lacunarity", lacunarity);
   noiseShader.setFloat("u_persistance", persistance);
   noiseShader.setInt("u_heightMap", 0);
+  noiseShader.setVec2("u_chunkOffset", worldOffset);
 
-  for (Chunk c : chunks) {
-    noiseShader.setVec2("u_chunkOffset", c.position + lastRenderOffset);
-    glBindImageTexture(0, c.heightMap, 0, GL_FALSE, 0, GL_READ_WRITE,
-                       GL_RGBA32F);
-    glDispatchCompute((texResolution + 15) / 16, (texResolution + 15) / 16, 1);
-    glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
+  glBindImageTexture(0, c.heightMap, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+  glDispatchCompute((chunkWidth + 15) / 16, (chunkWidth + 15) / 16, 1);
+  glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
+
+  c.ready = true;
+  c.needsRegen = false;
+}
+
+void Terrain::updateChunks(glm::vec3 playerPos) {
+  glm::ivec2 playerChunk =
+      glm::ivec2((int)std::round(playerPos.x / chunkWidth),
+                 (int)std::round(playerPos.z / chunkWidth));
+
+  if (playerChunk == lastPlayerChunk)
+    return;
+  lastPlayerChunk = playerChunk;
+
+  unsigned int n = drawDist * 2 - 1;
+  int half = (int)(n / 2);
+
+  for (int i = 0; i < (int)chunks.size(); i++) {
+    glm::ivec2 diff = chunks[i].coord - playerChunk;
+    bool outOfRange = std::abs(diff.x) > half || std::abs(diff.y) > half;
+    if (!outOfRange)
+      continue;
+
+    for (int cy = -half; cy <= half; cy++) {
+      for (int cx = -half; cx <= half; cx++) {
+        glm::ivec2 needed = playerChunk + glm::ivec2(cx, cy);
+        bool covered = false;
+        for (Chunk &c : chunks) {
+          if (c.coord == needed) {
+            covered = true;
+            break;
+          }
+        }
+        if (!covered) {
+          // recycle this chunk to the new coord
+          chunks[i].coord = needed;
+          chunks[i].ready = false;
+          chunks[i].needsRegen = true;
+          regenQueue.push(i);
+          goto nextChunk; // break both loops, move to next chunk index
+        }
+      }
+    }
+  nextChunk:;
+  }
+}
+
+void Terrain::processRegenQueue() {
+  if (regenQueue.empty())
+    return;
+
+  int idx = regenQueue.front();
+  regenQueue.pop();
+  generateChunkHeightmap(idx);
+}
+
+void Terrain::uploadVertexData() {
+  vao.bind();
+  vbo.bind();
+  vbo.setData(vertices.size() * sizeof(float), &vertices[0], GL_STATIC_DRAW);
+  vao.addBuffer(vbo, layout);
+}
+
+void Terrain::generateVertices() {
+  vertices.clear();
+  for (int i = 0; i < rez; i++) {
+    for (int j = 0; j < rez; j++) {
+      vertices.push_back(-chunkWidth / 2.0f + (chunkWidth * i) / (float)rez);
+      vertices.push_back(0.0f);
+      vertices.push_back(-chunkWidth / 2.0f + (chunkWidth * j) / (float)rez);
+      vertices.push_back(i / (float)rez);
+      vertices.push_back(j / (float)rez);
+
+      vertices.push_back(-chunkWidth / 2.0f +
+                         (chunkWidth * (i + 1)) / (float)rez);
+      vertices.push_back(0.0f);
+      vertices.push_back(-chunkWidth / 2.0f + (chunkWidth * j) / (float)rez);
+      vertices.push_back((i + 1) / (float)rez);
+      vertices.push_back(j / (float)rez);
+
+      vertices.push_back(-chunkWidth / 2.0f + (chunkWidth * i) / (float)rez);
+      vertices.push_back(0.0f);
+      vertices.push_back(-chunkWidth / 2.0f +
+                         (chunkWidth * (j + 1)) / (float)rez);
+      vertices.push_back(i / (float)rez);
+      vertices.push_back((j + 1) / (float)rez);
+
+      vertices.push_back(-chunkWidth / 2.0f +
+                         (chunkWidth * (i + 1)) / (float)rez);
+      vertices.push_back(0.0f);
+      vertices.push_back(-chunkWidth / 2.0f +
+                         (chunkWidth * (j + 1)) / (float)rez);
+      vertices.push_back((i + 1) / (float)rez);
+      vertices.push_back((j + 1) / (float)rez);
+    }
   }
 }
 
 void Terrain::render(Camera camera, glm::mat4 model, glm::mat4 projection) {
-  glm::vec3 pos = camera.getPos();
-  playerOffset.x = std::abs(lastRenderOffset.x - pos.x);
-  playerOffset.y = std::abs(lastRenderOffset.y - pos.z);
-
-  // std::cout << "x: " << playerOffset.x << std::endl;
-  // std::cout << "y: " << playerOffset.y << std::endl;
-
-  if (playerOffset.x > 0.5 * chunkWidth || playerOffset.y > 0.5 * chunkWidth) {
-    std::cout << "rendering new chunks" << std::endl;
-    std::cout << "x: " << lastRenderOffset.x << std::endl;
-    std::cout << "y: " << lastRenderOffset.y << std::endl;
-
-    initTerrain(1);
-    lastRenderOffset = glm::vec2(floor(pos.x), floor(pos.z));
-    playerOffset = glm::vec2(0.0f);
-  }
+  updateChunks(camera.getPos());
+  processRegenQueue();
 
   shader.bind();
-  for (Chunk c : chunks) {
+  for (Chunk &c : chunks) {
+    if (!c.ready)
+      continue;
+
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, c.heightMap);
 
-    glm::mat4 chunkModel =
-        glm::translate(model, glm::vec3(c.position.x, 0.0f, c.position.y));
-    chunkModel = glm::translate(
-        chunkModel, glm::vec3(lastRenderOffset.x, 0, lastRenderOffset.y));
+    glm::vec2 worldPos = glm::vec2(c.coord) * (float)chunkWidth;
+    glm::mat4 chunkModel = glm::translate(
+        glm::mat4(1.0f), glm::vec3(worldPos.x, 0.0f, worldPos.y));
+
     shader.setMat4("model", chunkModel);
     shader.setMat4("view", camera.getViewMatrix());
     shader.setMat4("projection", projection);
@@ -165,19 +212,18 @@ void Terrain::render(Camera camera, glm::mat4 model, glm::mat4 projection) {
     shader.setFloat("MAX_DISTANCE", tess_max_dist);
 
     shader.setFloat("u_amplitude", amp);
-    shader.setFloat("u_chunkWidth", chunkWidth);
+    shader.setFloat("u_chunkWidth", (float)chunkWidth);
     shader.setInt("u_noisePass", noisePass);
 
     shader.setVec3("u_lightDir", glm::normalize(lightDir));
-    shader.setVec3("u_lightColor", glm::normalize(lightColor));
-    shader.setVec3("u_ambientColor", glm::normalize(ambient));
+    shader.setVec3("u_lightColor", lightColor);
+    shader.setVec3("u_ambientColor", ambient);
     shader.setVec3("u_viewPos", camera.getPos());
 
     shader.setFloat("u_texScale", texScale);
     shader.setInt("u_normalMap", 1);
     shader.setVec3("u_terrainColor", terrainColor);
     shader.setVec3("u_waterColor", waterColor);
-
     shader.setVec3("u_snowColor", snowColor);
     shader.setFloat("u_snowSlopeMax", snowSlopeMax);
     shader.setFloat("u_snowSlopeMin", snowSlopeMin);

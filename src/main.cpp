@@ -82,7 +82,7 @@ int main() {
   {
     Skybox skybox("../resources/skyboxes/citrus-orchard-road", "hdr");
     Terrain terrain;
-    terrain.initShader("../shaders/noise_compute.glsl", rezScale,
+    terrain.initShader("../shaders/noise_compute.glsl", 
                        "../shaders/chunk_vert.glsl",
                        "../shaders/chunk_frag.glsl", nullptr,
                        "../shaders/tessellation_control.glsl",
@@ -180,7 +180,7 @@ int main() {
           ImGui::SliderFloat("slope strength", &terrain.slopeStrength, 0.0f,
                              10.0f);
           if (ImGui::Button("Reinitialize terrain")) {
-            terrain.initTerrain(rezScale);
+            terrain.initTerrain();
             // terrain.generateVertices();
             // terrain.uploadVertexData();
           }
