@@ -14,6 +14,7 @@
 #include <vertexBufferLayout.h>
 
 struct Chunk {
+  glm::vec2 position;
   glm::vec2 offset;
   unsigned int heightMap = 0;
   bool ready = false;

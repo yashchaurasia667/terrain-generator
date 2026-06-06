@@ -1,4 +1,5 @@
 #include "terrain.h"
+#include <glm/ext/matrix_transform.hpp>
 #include <iostream>
 #include <ostream>
 
@@ -10,7 +11,8 @@ void Terrain::generateChunks() {
       int x = width - (int)(n / 2);
       int y = height - (int)(n / 2);
 
-      Chunk c = {glm::ivec2(x * chunkWidth, y * chunkWidth)};
+      Chunk c = {glm::vec2(x * chunkWidth, y * chunkWidth),
+                 glm::vec2(0.0f, 0.0f)};
       chunks.push_back(c);
     }
   }
@@ -117,7 +119,7 @@ void Terrain::initTerrain(int rezScale) {
   noiseShader.setInt("u_heightMap", 0);
 
   for (Chunk c : chunks) {
-    noiseShader.setVec2("u_chunkOffset", c.offset);
+    noiseShader.setVec2("u_chunkOffset", c.position + lastRenderOffset);
     glBindImageTexture(0, c.heightMap, 0, GL_FALSE, 0, GL_READ_WRITE,
                        GL_RGBA32F);
     glDispatchCompute((texResolution + 15) / 16, (texResolution + 15) / 16, 1);
@@ -134,12 +136,13 @@ void Terrain::render(Camera camera, glm::mat4 model, glm::mat4 projection) {
   // std::cout << "y: " << playerOffset.y << std::endl;
 
   if (playerOffset.x > 0.5 * chunkWidth || playerOffset.y > 0.5 * chunkWidth) {
-    drawDist+=1;
-    generateChunks();
-    initTerrain(1);
-    lastRenderOffset = glm::vec2(pos.x, pos.z);
-    playerOffset = glm::vec2(0.0f);
     std::cout << "rendering new chunks" << std::endl;
+    std::cout << "x: " << lastRenderOffset.x << std::endl;
+    std::cout << "y: " << lastRenderOffset.y << std::endl;
+
+    initTerrain(1);
+    lastRenderOffset = glm::vec2(floor(pos.x), floor(pos.z));
+    playerOffset = glm::vec2(0.0f);
   }
 
   shader.bind();
@@ -148,7 +151,9 @@ void Terrain::render(Camera camera, glm::mat4 model, glm::mat4 projection) {
     glBindTexture(GL_TEXTURE_2D, c.heightMap);
 
     glm::mat4 chunkModel =
-        glm::translate(model, glm::vec3(c.offset.x, 0.0f, c.offset.y));
+        glm::translate(model, glm::vec3(c.position.x, 0.0f, c.position.y));
+    chunkModel = glm::translate(
+        chunkModel, glm::vec3(lastRenderOffset.x, 0, lastRenderOffset.y));
     shader.setMat4("model", chunkModel);
     shader.setMat4("view", camera.getViewMatrix());
     shader.setMat4("projection", projection);
