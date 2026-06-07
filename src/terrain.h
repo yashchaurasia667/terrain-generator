@@ -48,7 +48,7 @@ public:
   Shader shader;
 
   Terrain(int chunkWidth = 1000, int cellWidth = 200, int noiseSeed = 0,
-          unsigned int rez = 20, int drawDist = 2);
+          unsigned int rez = 20, int drawDist = 3);
   ~Terrain();
 
   void initShader(const char *compute, const char *vert,

@@ -29,7 +29,7 @@
 
 // GLOBAL VARIABLES
 bool camera_movement = false;
-Camera camera(glm::vec3(0.0f, 1.0f, 0.0f), 45.0f, 0.1f, 50.5f);
+Camera camera(glm::vec3(0.0f, 1.0f, 0.0f), 45.0f, 0.1f, 250.0f);
 unsigned int scr_width = 1280, scr_height = 720;
 
 // IMGUI PARAMS
