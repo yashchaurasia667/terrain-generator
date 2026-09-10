@@ -37,7 +37,6 @@ struct DeletionQue {
 
 class Terrain {
 public:
-  DeletionQue _main_deletion_que;
   DeletionQue _chunk_deletion_que;
 
   // forces update on first frame
@@ -51,7 +50,7 @@ public:
 
   // noise vars
   int _noise_seed = 5;
-  int _noise_pass = 10;
+  int _noise_pass = 7;
   float _amp = 128.0f, _freq = 0.29f, _persistance = 0.43f, _lacunarity = 2.7f;
 
   // lighting/color vars

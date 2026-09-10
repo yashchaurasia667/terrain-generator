@@ -16,21 +16,9 @@ Terrain::Terrain(int chunkWidth, int cellWidth, int noiseSeed, unsigned int rez,
   generateChunks();
 }
 
-Terrain::~Terrain() {
-  _chunk_deletion_que.flush();
-  _main_deletion_que.flush();
-
-  for (Chunk &c : _chunks) {
-    if (c.heightMap != 0)
-      glDeleteTextures(1, &c.heightMap);
-  }
-}
+Terrain::~Terrain() { _chunk_deletion_que.flush(); }
 
 void Terrain::generateChunks() {
-  for (auto c : _chunks) {
-    unsigned int id = c.heightMap;
-    _chunk_deletion_que.push([id]() { glDeleteTextures(1, &id); });
-  }
   _chunk_deletion_que.flush();
   _chunks.clear();
 
@@ -52,12 +40,15 @@ void Terrain::generateChunkTextures() {
   for (unsigned int i = 0; i < _chunks.size(); i++) {
     glGenTextures(1, &_chunks[i].heightMap);
     glBindTexture(GL_TEXTURE_2D, _chunks[i].heightMap);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, _chunk_width, _chunk_width, 0,
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, _chunk_width, _chunk_width, 0,
                  GL_RGBA, GL_FLOAT, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    const unsigned int id = _chunks[i].heightMap;
+    _chunk_deletion_que.push([id]() { glDeleteTextures(1, &id); });
   }
 }
 
@@ -96,7 +87,8 @@ void Terrain::generateChunkHeightmap(int idx) {
   _noise_shader.setInt("u_heightMap", 0);
   _noise_shader.setVec2("u_chunkOffset", worldOffset);
 
-  glBindImageTexture(0, c.heightMap, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+  // GL_RGBA8
+  glBindImageTexture(0, c.heightMap, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA16F);
   glDispatchCompute((_chunk_width + 15) / 16, (_chunk_width + 15) / 16, 1);
   glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
 
