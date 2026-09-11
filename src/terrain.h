@@ -17,6 +17,9 @@
 #include <queue>
 #include <vector>
 
+constexpr unsigned int heightMapType = GL_RGBA16F;
+constexpr unsigned int heightMapResolution = 512;
+
 struct Chunk {
   glm::ivec2 coord;
   unsigned int heightMap = 0;

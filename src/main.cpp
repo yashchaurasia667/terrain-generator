@@ -207,7 +207,7 @@ int main(int argc, char *argv[]) {
             ImGui::SliderInt("max tessellation level", &terrain._tess_max_level,
                              4.0f, 128.0f);
           }
-          ImGui::SliderFloat("amplitude", &terrain._amp, 0.0f, 1000.0f);
+          ImGui::SliderFloat("amplitude", &terrain._amp, 0.0f, 5000.0f);
           ImGui::SliderFloat("snow slope max", &terrain._snow_slope_max, 0.0f,
                              1.0f);
           ImGui::SliderFloat("snow slope min", &terrain._snow_slope_min, 0.0f,

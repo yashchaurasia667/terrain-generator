@@ -40,8 +40,8 @@ void Terrain::generateChunkTextures() {
   for (unsigned int i = 0; i < _chunks.size(); i++) {
     glGenTextures(1, &_chunks[i].heightMap);
     glBindTexture(GL_TEXTURE_2D, _chunks[i].heightMap);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, _chunk_width, _chunk_width, 0,
-                 GL_RGBA, GL_FLOAT, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, heightMapType, heightMapResolution,
+                 heightMapResolution, 0, GL_RGBA, GL_FLOAT, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -72,7 +72,7 @@ void Terrain::initTerrain() {
 void Terrain::generateChunkHeightmap(int idx) {
   Chunk &c = _chunks[idx];
   // world offset: chunk coord × chunk size in world units
-  glm::vec2 worldOffset = glm::vec2(c.coord) * (float)_chunk_width;
+  glm::vec2 worldOffset = glm::vec2(c.coord) * (float)heightMapResolution;
 
   _noise_shader.bind();
   _noise_shader.setInt("u_seed", _noise_seed);
@@ -88,8 +88,10 @@ void Terrain::generateChunkHeightmap(int idx) {
   _noise_shader.setVec2("u_chunkOffset", worldOffset);
 
   // GL_RGBA8
-  glBindImageTexture(0, c.heightMap, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA16F);
-  glDispatchCompute((_chunk_width + 15) / 16, (_chunk_width + 15) / 16, 1);
+  glBindImageTexture(0, c.heightMap, 0, GL_FALSE, 0, GL_READ_WRITE,
+                     heightMapType);
+  glDispatchCompute((heightMapResolution + 15) / 16,
+                    (heightMapResolution + 15) / 16, 1);
   glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
 
   c.ready = true;
