@@ -28,6 +28,7 @@ bool camera_movement = false;
 Camera camera(glm::vec3(0.0f, 1.0f, 0.0f), 45.0f, 0.1f, 250.0f);
 unsigned int scr_width = 1280, scr_height = 720;
 const int VSYNC = 0;
+float view_dist = 100000.0f;
 
 // IMGUI PARAMS
 bool wireframe = false, sanity_check = false, render_terrain = true;
@@ -213,6 +214,7 @@ int main(int argc, char *argv[]) {
           ImGui::SliderFloat("snow slope min", &terrain._snow_slope_min, 0.0f,
                              10.0f);
           ImGui::SliderFloat("tex scale", &terrain._tex_scale, 0.0f, 100.0f);
+          ImGui::InputFloat("view distance", &view_dist);
           ImGui::End();
         }
       }
@@ -221,7 +223,7 @@ int main(int argc, char *argv[]) {
       glm::mat4 view = camera.getViewMatrix();
       glm::mat4 projection = glm::perspective(
           camera.getFov(), (float)scr_width / (float)scr_height, 0.1f,
-          10000.0f);
+          view_dist);
 
       if (sanity_check) {
         checkShader.bind();

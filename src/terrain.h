@@ -18,7 +18,7 @@
 #include <vector>
 
 constexpr unsigned int heightMapType = GL_RGBA16F;
-constexpr unsigned int heightMapResolution = 512;
+constexpr unsigned int heightMapResolution = 256;
 
 struct Chunk {
   glm::ivec2 coord;
@@ -45,8 +45,8 @@ public:
   // forces update on first frame
   glm::ivec2 _last_player_chunk = glm::ivec2(INT_MAX);
 
-  int _chunk_width, _cell_width, _rez = 20, _draw_dist = 2;
-  int _tess_min_level = 4, _tess_max_level = 64;
+  int _chunk_width, _cell_width, _rez = 20, _draw_dist = 5;
+  int _tess_min_level = 4, _tess_max_level = 16;
   float _tess_min_dist = 20, _tess_max_dist = 2000;
   float _tex_scale = 15.5f, _slope_strength = 1.2f, _snow_slope_max = 0.3f,
         _snow_slope_min = 1.2f;
@@ -54,7 +54,7 @@ public:
   // noise vars
   int _noise_seed = 5;
   int _noise_pass = 7;
-  float _amp = 128.0f, _freq = 0.29f, _persistance = 0.43f, _lacunarity = 2.7f;
+  float _amp = 100.0f, _freq = 0.29f, _persistance = 0.45f, _lacunarity = 2.3f;
 
   // lighting/color vars
   glm::vec3 _light_dirn = glm::vec3(-0.35f, 0.3f, 1.0f),
