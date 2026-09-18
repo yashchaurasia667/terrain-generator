@@ -4,6 +4,8 @@
 #include <glad/glad.h>
 
 #include <GLFW/glfw3.h>
+#include <glm/ext/vector_float3.hpp>
+#include <glm/ext/vector_float4.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -38,6 +40,12 @@ struct DeletionQue {
   }
 };
 
+struct Frustum {
+  glm::vec4 planes[6];
+  void extract(const glm::mat4 &vp);
+  bool intersectsAABB(glm::vec3 min, glm::vec3 max) const;
+};
+
 class Terrain {
 public:
   DeletionQue _chunk_deletion_que;
@@ -67,6 +75,10 @@ public:
   // shaders
   ComputeShader _noise_shader;
   Shader _shader;
+
+  // Frustum
+  Frustum viewFrustum;
+  int _drawn_chunks = 0, _culled_chunks = 0;
 
   Terrain(int chunkWidth = 1000, int cellWidth = 200, int noiseSeed = 0,
           unsigned int rez = 20, int drawDist = 3);

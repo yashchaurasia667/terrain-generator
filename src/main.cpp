@@ -169,6 +169,9 @@ int main(int argc, char *argv[]) {
           ImGui::Checkbox("wireframe", &wireframe);
           ImGui::Checkbox("sanity check", &sanity_check);
           ImGui::Checkbox("render terrain", &render_terrain);
+          ImGui::Text("Chunks drawn: %d", terrain._drawn_chunks);
+          ImGui::Text("Chunks culled: %d", terrain._culled_chunks);
+
           ImGui::End();
         }
         {
@@ -222,8 +225,8 @@ int main(int argc, char *argv[]) {
       glm::mat4 model = glm::mat4(1.0f);
       glm::mat4 view = camera.getViewMatrix();
       glm::mat4 projection = glm::perspective(
-          camera.getFov(), (float)scr_width / (float)scr_height, 0.1f,
-          view_dist);
+          glm::radians(camera.getFov()), (float)scr_width / (float)scr_height,
+          0.1f, view_dist);
 
       if (sanity_check) {
         checkShader.bind();
@@ -280,6 +283,18 @@ void framebufferSizeCallback(GLFWwindow *, int width, int height) {
 void processInput(GLFWwindow *window) {
   if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
     glfwSetWindowShouldClose(window, true);
+  if (glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS) {
+    if (camera_movement) {
+      camera.firstMouse = true;
+      camera_movement = false;
+      glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+      glfwSetCursorPosCallback(window, nullptr);
+    } else {
+      glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+      glfwSetCursorPosCallback(window, cursorPosCallback);
+      camera_movement = true;
+    }
+  }
   camera.processMovement(window);
 }
 
