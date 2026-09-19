@@ -1,4 +1,7 @@
 #pragma once
+#include <atomic>
+#include <condition_variable>
+#include <cwchar>
 #include <deque>
 #include <functional>
 #include <glad/glad.h>
@@ -6,10 +9,12 @@
 #include <GLFW/glfw3.h>
 #include <glm/ext/vector_float3.hpp>
 #include <glm/ext/vector_float4.hpp>
+#include <glm/ext/vector_int2.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <camera.h>
+#include <mutex>
 #include <shader.h>
 #include <vertexArray.h>
 #include <vertexBuffer.h>
@@ -73,11 +78,9 @@ public:
             _water_color = glm::vec3(0.2f, 0.5f, 0.7f);
 
   // shaders
-  ComputeShader _noise_shader;
   Shader _shader;
 
-  // Frustum
-  Frustum viewFrustum;
+  // frustum culling vars
   int _drawn_chunks = 0, _culled_chunks = 0;
 
   Terrain(int chunkWidth = 1000, int cellWidth = 200, int noiseSeed = 0,
@@ -102,6 +105,24 @@ private:
   VertexBuffer _vbo;
   VertexBufferLayout _layout;
 
+  // compute shader
+  ComputeShader _noise_shader;
+
+  // Frustum
+  Frustum viewFrustum;
+
+  // multithreading
+  std::thread _chunk_thread;
+  std::mutex _chunks_mutex;
+  std::mutex _regen_mutex;
+  glm::ivec2 _pending_player_chunk;
+
+  std::condition_variable _cv;
+  std::condition_variable _regen_cv;
+  std::atomic<bool> _running = true;
+  bool _chunk_update_pending = false;
+  bool _regen_pending = false;
+
   void generateChunkTextures();
   void generateVertices();
   void uploadVertexData();
@@ -109,4 +130,6 @@ private:
   void generateChunkHeightmap(int chunkIdx);
   void updateChunks(glm::vec3 playerPos);
   void processRegenQueue();
+
+  void chunkUpdateThread();
 };

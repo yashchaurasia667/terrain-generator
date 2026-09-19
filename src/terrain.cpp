@@ -1,6 +1,6 @@
 #include "terrain.h"
-#include <chrono>
-#include <iostream>
+#include <condition_variable>
+#include <mutex>
 
 Terrain::Terrain(int chunkWidth, int cellWidth, int noiseSeed, unsigned int rez,
                  int drawDist) {
@@ -18,9 +18,16 @@ Terrain::Terrain(int chunkWidth, int cellWidth, int noiseSeed, unsigned int rez,
   generateVertices();
   uploadVertexData();
   generateChunks();
+
+  _chunk_thread = std::thread(&Terrain::chunkUpdateThread, this);
 }
 
-Terrain::~Terrain() { _chunk_deletion_que.flush(); }
+Terrain::~Terrain() {
+  _running = false;
+  _cv.notify_one();
+  _chunk_thread.join();
+  _chunk_deletion_que.flush();
+}
 
 void Terrain::generateChunks() {
   _chunk_deletion_que.flush();
@@ -38,12 +45,7 @@ void Terrain::generateChunks() {
       _chunks.push_back(c);
     }
   }
-  auto start = std::chrono::high_resolution_clock::now();
   generateChunkTextures();
-  auto end = std::chrono::high_resolution_clock::now();
-  auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
-                .count();
-  // std::cout << "genereate chunk textures took: " << ms << " ms" << std::endl;
 }
 
 void Terrain::generateChunkTextures() {
@@ -75,12 +77,7 @@ void Terrain::initShader(const char *compute, const char *vert,
 void Terrain::initTerrain() {
   for (int i = 0; i < (int)_chunks.size(); i++) {
 
-    auto start = std::chrono::high_resolution_clock::now();
     generateChunkHeightmap(i);
-    auto end = std::chrono::high_resolution_clock::now();
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
-                  .count();
-    // std::cout << i << " heightmap Took: " << ms << "ms" << std::endl;
   }
   glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
 }
@@ -114,6 +111,80 @@ void Terrain::generateChunkHeightmap(int idx) {
   c.needsRegen = false;
 }
 
+void Terrain::chunkUpdateThread() {
+  while (_running) {
+    {
+      std::unique_lock<std::mutex> lock(_chunks_mutex);
+      _cv.wait(lock, [this] { return _chunk_update_pending || !_running; });
+
+      if (!_running)
+        return;
+    }
+
+    unsigned int n = _draw_dist * 2 - 1;
+    int half = (int)(n / 2);
+
+    std::vector<size_t> outOfRangeIndices;
+    outOfRangeIndices.reserve(_chunks.size());
+
+    std::vector<bool> covered(n * n, false);
+
+    for (size_t i = 0; i < _chunks.size(); i++) {
+      glm::ivec2 diff = _chunks[i].coord - _pending_player_chunk;
+
+      if (std::abs(diff.x) > half || std::abs(diff.y) > half) {
+        outOfRangeIndices.push_back(i);
+      } else {
+        // Map the coordinate difference to our local grid (0 to n-1)
+        int gridX = diff.x + half;
+        int gridY = diff.y + half;
+        covered[gridY * n + gridX] = true;
+      }
+    }
+
+    // PASS 2: Find uncovered spots in our needed radius and recycle
+    // out-of-range chunks to fill them
+    size_t recycleIdx = 0;
+    for (int cy = -half; cy <= half; cy++) {
+      for (int cx = -half; cx <= half; cx++) {
+        int gridX = cx + half;
+        int gridY = cy + half;
+
+        // If this spot isn't covered by an existing chunk
+        if (!covered[gridY * n + gridX]) {
+
+          // Safety guard: ensure we have a chunk to recycle
+          if (recycleIdx >= outOfRangeIndices.size())
+            break;
+
+          // Get the index of an out-of-range chunk
+          size_t chunkIdx = outOfRangeIndices[recycleIdx++];
+
+          {
+            std::lock_guard<std::mutex> lock(_chunks_mutex);
+
+            // Recycle it
+            _chunks[chunkIdx].coord =
+                _pending_player_chunk + glm::ivec2(cx, cy);
+            _chunks[chunkIdx].ready = false;
+            _chunks[chunkIdx].needsRegen = true;
+          }
+          {
+            std::lock_guard<std::mutex> lock(_regen_mutex);
+            _regenQueue.push(chunkIdx);
+          }
+        }
+      }
+    }
+
+    {
+      std::lock_guard<std::mutex> lock(_regen_mutex);
+      _regen_pending = true;
+    }
+    _regen_cv.notify_one();
+  }
+}
+
 void Terrain::updateChunks(glm::vec3 playerPos) {
   glm::ivec2 playerChunk =
       glm::ivec2((int)std::round(playerPos.x / _chunk_width),
@@ -123,64 +194,39 @@ void Terrain::updateChunks(glm::vec3 playerPos) {
     return;
   _last_player_chunk = playerChunk;
 
-  unsigned int n = _draw_dist * 2 - 1;
-  int half = (int)(n / 2);
-
-  std::vector<size_t> outOfRangeIndices;
-  outOfRangeIndices.reserve(_chunks.size());
-
-  std::vector<bool> covered(n * n, false);
-
-  for (size_t i = 0; i < _chunks.size(); i++) {
-    glm::ivec2 diff = _chunks[i].coord - playerChunk;
-
-    if (std::abs(diff.x) > half || std::abs(diff.y) > half) {
-      outOfRangeIndices.push_back(i);
-    } else {
-      // Map the coordinate difference to our local grid (0 to n-1)
-      int gridX = diff.x + half;
-      int gridY = diff.y + half;
-      covered[gridY * n + gridX] = true;
-    }
+  {
+    std::lock_guard<std::mutex> lock(_chunks_mutex);
+    _pending_player_chunk = playerChunk;
+    _chunk_update_pending = true;
   }
-
-  // PASS 2: Find uncovered spots in our needed radius and recycle out-of-range
-  // chunks to fill them
-  size_t recycleIdx = 0;
-
-  for (int cy = -half; cy <= half; cy++) {
-    for (int cx = -half; cx <= half; cx++) {
-      int gridX = cx + half;
-      int gridY = cy + half;
-
-      // If this spot isn't covered by an existing chunk
-      if (!covered[gridY * n + gridX]) {
-
-        // Safety guard: ensure we have a chunk to recycle
-        if (recycleIdx >= outOfRangeIndices.size())
-          break;
-
-        // Get the index of an out-of-range chunk
-        size_t chunkIdx = outOfRangeIndices[recycleIdx++];
-
-        // Recycle it
-        _chunks[chunkIdx].coord = playerChunk + glm::ivec2(cx, cy);
-        _chunks[chunkIdx].ready = false;
-        _chunks[chunkIdx].needsRegen = true;
-        _regenQueue.push(chunkIdx);
-      }
-    }
-  }
+  _cv.notify_one();
 }
 
 void Terrain::processRegenQueue() {
-  if (_regenQueue.empty())
-    return;
+  {
+    std::unique_lock<std::mutex> lock(_regen_mutex);
+    _regen_cv.wait(lock, [this]() { return _regen_pending; });
+    _regen_pending = false;
+  }
 
-  int idx = _regenQueue.front();
-  _regenQueue.pop();
+  int idx;
+  {
+    std::lock_guard<std::mutex> lock(_regen_mutex);
+
+    if (_regenQueue.empty())
+      return;
+
+    idx = _regenQueue.front();
+    _regenQueue.pop();
+  }
   generateChunkHeightmap(idx);
   glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
+
+  {
+    std::lock_guard<std::mutex> lock(_chunks_mutex);
+    _chunks[idx].ready = true;
+    _chunks[idx].needsRegen = false;
+  }
 }
 
 void Terrain::uploadVertexData() {
@@ -262,54 +308,45 @@ void Terrain::render(Camera camera, glm::mat4 model, glm::mat4 projection) {
   viewFrustum.extract(projection * camera.getViewMatrix());
   _drawn_chunks = 0;
   _culled_chunks = 0;
-  for (Chunk &c : _chunks) {
-    if (!c.ready)
-      continue;
 
-    glm::vec2 worldPos = glm::vec2(c.coord) * (float)_chunk_width;
-    glm::mat4 chunkModel = glm::translate(
-        glm::mat4(1.0f), glm::vec3(worldPos.x, 0.0f, worldPos.y));
+  {
+    std::lock_guard<std::mutex> lock(_chunks_mutex);
 
-    float half = _chunk_width / 2.0f;
+    for (Chunk &c : _chunks) {
+      if (!c.ready)
+        continue;
 
-    glm::vec3 bmin(worldPos.x - half, -_amp * 0.1f, worldPos.y - half);
-    glm::vec3 bmax(worldPos.x + half, _amp, worldPos.y + half);
-    if (!viewFrustum.intersectsAABB(bmin, bmax)) {
-      _culled_chunks++;
-      continue;
+      glm::vec2 worldPos = glm::vec2(c.coord) * (float)_chunk_width;
+      glm::mat4 chunkModel = glm::translate(
+          glm::mat4(1.0f), glm::vec3(worldPos.x, 0.0f, worldPos.y));
+
+      float half = _chunk_width / 2.0f;
+
+      glm::vec3 bmin(worldPos.x - half, -_amp * 0.1f, worldPos.y - half);
+      glm::vec3 bmax(worldPos.x + half, _amp, worldPos.y + half);
+      if (!viewFrustum.intersectsAABB(bmin, bmax)) {
+        _culled_chunks++;
+        continue;
+      }
+      _drawn_chunks++;
+
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, c.heightMap);
+
+      _shader.setMat4("model", chunkModel);
+      _shader.setInt("heightMap", 0);
+      _shader.setInt("u_normalMap", 1);
+
+      _vao.bind();
+      glDrawArrays(GL_PATCHES, 0, _rez * _rez * 4);
     }
-    _drawn_chunks++;
-
-    if (!viewFrustum.intersectsAABB(bmin, bmax))
-      continue; // CULLED
-
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, c.heightMap);
-
-    _shader.setMat4("model", chunkModel);
-    _shader.setInt("heightMap", 0);
-    _shader.setInt("u_normalMap", 1);
-
-    _vao.bind();
-    glDrawArrays(GL_PATCHES, 0, _rez * _rez * 4);
   }
 }
 
 void Terrain::reinit() {
-  auto start = std::chrono::high_resolution_clock::now();
   generateChunks();
-  auto end = std::chrono::high_resolution_clock::now();
-  auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
-                .count();
-  // std::cout << "generateChunks Took: " << ms << "ms" << std::endl;
 
-  start = std::chrono::high_resolution_clock::now();
   initTerrain();
-  end = std::chrono::high_resolution_clock::now();
-  ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
-           .count();
-  // std::cout << "initTerrain Took: " << ms << "ms" << std::endl;
-
   generateVertices();
   uploadVertexData();
 }
